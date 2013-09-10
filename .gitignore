@@ -11,3 +11,23 @@
 *.lai
 *.la
 *.a
+
+# larger files more than 100 MB
+*.ipch
+*.IPCH
+Difference Finder/ipch/gyte_differencefinder-f700f1f0/
+
+# output folders
+Gyte_DifferenceFinder/result/
+Gyte_DifferenceFinder/Resources/
+Gyte_DifferenceFinder/tiles/
+
+Difference Finder/Gyte_DifferenceFinder/Debug/
+Difference Finder/Gyte_DifferenceFinder/Release/
+
+#image files
+*.png
+*.JPG
+*.jpg
+*.bmp
+*.txt
