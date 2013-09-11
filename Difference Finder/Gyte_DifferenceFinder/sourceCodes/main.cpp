@@ -19,6 +19,12 @@
 #include "DiffFinderHOG.h"
 #include "common.h"
 
+namespace {
+	
+	void configurePath(char** path, int size);
+
+}
+
 int main(void)
 {
 	// cv::Mat im1 = cv::imread("C:\\Users\\Coker\\Desktop\\tests\\test5\\inputs\\im1.JPG");
@@ -42,6 +48,9 @@ int main(void)
 	printf("Please Enter the output path:\n");
 	gets(outputPath);
 
+	configurePath(&inputPath, strlen(inputPath));
+	configurePath(&outputPath, strlen(outputPath));
+
 	std::string ImageMatchPath(inputPath), panoMatchPath(inputPath);
 
 	ImageMatchPath += "\\ImageMatch.jpg";
@@ -57,6 +66,35 @@ int main(void)
 	scanf("%*d");
 
 	return 0;
+}
+
+namespace {
+
+	void configurePath(char** path, int size) {
+		char *res =new char[ sizeof(char)*MAX_PATH_LENGTH ];
+		char *temp;
+		char * const startOfTheResVariable = res;
+
+		strcpy(res, (*path));
+
+		temp = (*path);
+
+		do {
+			res = strchr(res, '\\' );
+
+			if (NULL == res) break;
+			memmove(res+2, res+1, strlen(res));
+			
+			res[1] = '\\';
+			res += 2;
+
+		} while(true);
+
+		(*path) = startOfTheResVariable;
+		
+		return;
+	}
+
 }
 
 #if 0
