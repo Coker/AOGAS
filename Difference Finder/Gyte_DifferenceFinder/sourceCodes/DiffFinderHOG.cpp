@@ -24,6 +24,8 @@
 
 #define SHIFTER_AMOUNT 0.05
 
+#define MAX_BUF_SIZE 250
+
 double ratio_1 =3, ratio_2 =3;
 int threshold_1 =950, threshold_2 =1350;
 
@@ -55,8 +57,9 @@ namespace {
 	cv::Mat dilate(const cv::Mat& src, const int dilationSize, const int dilationType);
 	cv::Mat erade(const cv::Mat& src, const int eradeSize, const int eradeType);
 	void printHist2Screen(const cv::Mat& histogram);
-	void findEdgeDetectorOptimumParameter(const cv::Mat& image1, const cv::Mat& image2,
-					double& ratio_1, double& ratio_2, int& threshold_1, int& threshold_2);
+	// void findEdgeDetectorOptimumParameter(const cv::Mat& image1, const cv::Mat& image2, double& ratio_1, double& ratio_2, int& threshold_1, int& threshold_2);
+	int processImageTileByTile (const cv::Mat& image1, const cv::Mat& image2, int numberOfTile,
+								ExcelFormat::BasicExcel& xls, FILE* fPtr);
 } // end of unnamed namespace
 
 GYTE_DIFF_FINDER::DiffFinderHOG::DiffFinderHOG() : DiffFinder() {
@@ -228,17 +231,190 @@ namespace {
 		return eroded;
 	}
 
-	void findEdgeDetectorOptimumParameter(const cv::Mat& image1, const cv::Mat& image2,
-		double& ratio_1, double& ratio_2, int& threshold_1, int& threshold_2) {
+	int processImageTileByTile (const cv::Mat& image1, const cv::Mat& image2, int numberOfTile,
+						ExcelFormat::BasicExcel& xls, FILE* fPtr) {
 		
-		if (image1.empty() || image2.empty()) {
-			fprintf(stderr, "findEdgeDetectorOptimumParameter: Inputs hasn't set\n");
-			return;
+		if (image1.empty() || image2.empty() || NULL == fPtr) {
+			fprintf(stderr, "ERROR processImageTileByTile: inputs have NOT set !\n");
+			return -1;
 		}
+		
+		// file content information
+		fprintf(fPtr, "wTileSize hTileSize\n\n");
+		fprintf(fPtr, "wPoint1 hPoint1 wPoint2 hPoint2\n");
+		fprintf(fPtr, "difference\n\n");
 
+		cv::Mat hist1,
+				hist2;
+		
+		ExcelFormat::BasicExcelWorksheet* sheet;
+		ExcelFormat::XLSFormatManager fmt_mgr(xls);
 
+		ExcelFormat::ExcelFont font_bold;
+		font_bold._weight = FW_BOLD; // 700
 
-		return;
+		ExcelFormat::CellFormat fmt_bold(fmt_mgr);
+		fmt_bold.set_font(font_bold);
+		// end of excel file config.
+
+		char sheetName[50];
+		char diffHist[25];
+
+		int hTileSize = image1.rows/numberOfTile,
+			wTileSize = image1.cols/numberOfTile;
+
+		fprintf(fPtr, "%d %d\n\n", wTileSize, hTileSize);
+
+		for (int i=0; i<numberOfTile; ++i) { // form left to right
+			for (int j=0; j<numberOfTile; ++j) { // from top to down
+				
+				fprintf(stdout, "%d-%d processing\n", i,j);
+
+				int diffOfHistogram =0;
+				int minDiffOfHistogram =0;
+			
+				ImageShifterAmount curr, min;
+				curr.i =0;
+				curr.j =0;
+				min = curr;
+			
+				cv::Rect roi(wTileSize*(i+curr.i), hTileSize*(j+curr.j), wTileSize, hTileSize);
+				
+				cv::Mat tile1 = getSpecificRegionOfTheImage(image1, roi);
+				getHOGFeatures1(tile1, hist1);
+
+				cv::Mat tile2 = getSpecificRegionOfTheImage(image2, roi);
+					
+				getHOGFeatures1(tile2, hist2);
+
+				cv::imwrite("tiles//tile1.jpg", tile1);
+				cv::imwrite("tiles//tile2.jpg", tile2);
+
+				diffOfHistogram = calcDiffHistogram(hist1, hist2);
+				minDiffOfHistogram = diffOfHistogram;
+
+				// apply HOG all possible neighboor to get min diff
+				#define SET_DIF_VALUE roi = cv::Rect(wTileSize*(i+curr.i), hTileSize*(j+curr.j), wTileSize, hTileSize); \
+									cv::Mat tile2 = getSpecificRegionOfTheImage(image2, roi);							\
+																														\
+									getHOGFeatures1(tile2, hist2);														\
+									diffOfHistogram = calcDiffHistogram(hist1, hist2);									\
+																														\
+																														\
+									if (diffOfHistogram < minDiffOfHistogram) {											\
+										minDiffOfHistogram = diffOfHistogram;											\
+										min = curr;																		\
+										cv::imwrite("tiles//tile1.jpg", tile1);											\
+										cv::imwrite("tiles//tile2.jpg", tile2);											\
+									}																					\
+																														\
+									tile2.release();
+
+				// -->
+				if (i != numberOfTile-1) {
+					curr.i = SHIFTER_AMOUNT;
+					curr.j = 0;
+						
+					SET_DIF_VALUE
+				}
+
+				//    -->
+				//   |
+				//   V
+
+				if ( !(i == numberOfTile-1 || j == numberOfTile-1) ) {
+					curr.i = SHIFTER_AMOUNT;
+					curr.j = SHIFTER_AMOUNT;
+						
+					SET_DIF_VALUE
+				}
+
+				//   |
+				//   V
+				if (j != numberOfTile-1) {
+					curr.i = 0;
+					curr.j = SHIFTER_AMOUNT;
+
+					SET_DIF_VALUE
+				}
+
+				//  < --
+				//     |
+				//     V
+				if ( !(i == 0 || j == numberOfTile-1) ) {
+					curr.i = -SHIFTER_AMOUNT;
+					curr.j = SHIFTER_AMOUNT;
+
+					SET_DIF_VALUE
+				}
+
+				// <--
+				if (0 != i) {
+					curr.i = -SHIFTER_AMOUNT;
+					curr.j = 0;
+
+					SET_DIF_VALUE
+				}
+
+				//    ^
+				//    |
+				// <--
+				if ( !(i == 0 || j == 0) ) {
+					curr.i = -SHIFTER_AMOUNT;
+					curr.j = -SHIFTER_AMOUNT;
+
+					SET_DIF_VALUE
+				}
+					
+				//  ^ 
+				//  |
+				if ( j != 0) {
+					curr.i = 0;
+					curr.j = -SHIFTER_AMOUNT;
+
+					SET_DIF_VALUE
+				}
+
+				//  ^ 
+				//  |__>
+				if ( !(j == 0 || i == numberOfTile-1) ) {
+					curr.i = SHIFTER_AMOUNT;
+					curr.j = -SHIFTER_AMOUNT;
+
+					SET_DIF_VALUE
+				}
+
+				#undef SET_DIF_VALUE
+
+				fprintf(stdout, "%d-%d done\n", i,j);
+				sprintf(sheetName, "%d-%d", i, j);
+  				sheet = xls.GetWorksheet(i*numberOfTile+j);
+				ExcelFormat::XLSFormatManager fmt_mgr(xls);
+				sheet->Rename( sheetName );
+			
+				(sheet->Cell(0,0))->SetFormat(fmt_bold);
+				(sheet->Cell(0,1))->SetFormat(fmt_bold);
+				(sheet->Cell(0,0))->Set("RgbPano");
+				(sheet->Cell(0,1))->Set("RgbImage");
+
+				// histogram data is printed to excel file
+				printHistogramExcel(hist1, hist2, sheet);
+
+				int tile1StartPoint_w = wTileSize*i,
+					tile1StartPoint_h = hTileSize*j;
+
+				int tile2StartPoint_w = (int) wTileSize*(i+min.i),
+					tile2StartPoint_h = (int) hTileSize*(j+min.j);
+
+				// fprintf(stdout, "tile start point %d-%d\n", temp1, temp2);
+
+				fprintf(fPtr, "%d %d %d %d\n", tile1StartPoint_w, tile1StartPoint_h, tile2StartPoint_w, tile2StartPoint_h);
+				fprintf(fPtr, "%d\n\n", minDiffOfHistogram);
+
+			} // end of for j
+		} // end of for i
+
+		return 0;
 	}
 
 	GYTE_DIFF_FINDER::difoutputs getDifference(const cv::Mat& const image1, const cv::Mat& const image2,
@@ -289,16 +465,13 @@ namespace {
 		getHOGFeatures1(edgeImage1, hist1);
 		getHOGFeatures1(edgeImage2, hist2);
 
-		printf("Histogram dif of the Images %d\n", calcDiffHistogram(hist1, hist2));
+		fprintf(stdout, "Histogram dif of the Images %d\n", calcDiffHistogram(hist1, hist2));
 		
 		// edgeImage1 = dilate(edgeImage1, 3, 3);
 		// edgeImage2 = dilate(edgeImage2, 3, 3);
 
 		cv::cvtColor(edgeImage1, edgeImage1, CV_RGB2GRAY);
 		cv::cvtColor(edgeImage2, edgeImage2, CV_RGB2GRAY);
-
-		outputs.edgeMap1 = edgeImage1;
-		outputs.edgeMap2 = edgeImage2;
 
 #if defined (DEBUG)
 		cv::imwrite("edgeImage1.jpg", edgeImage1);
@@ -328,190 +501,84 @@ namespace {
 		int wTileSize = image1.cols;
 		wTileSize /= numberOfTile;
 
+		FILE *resFilePtr = fopen("tileRes.txt", "w");
+
+		if (NULL == resFilePtr) {
+			fprintf(stderr, "ERROR getDifference function: resFile.txt Can Not Created !\n");
+			return outputs;
+		}
+
 #if defined (DEBUG)
 		cv::imshow("image1", img1);
 		cv::imshow("image2", img2);
 		cv::waitKey(0);
 #endif
+		processImageTileByTile(edgeImage1, edgeImage2, 5, xls, resFilePtr);
+		fclose( resFilePtr );
+		resFilePtr = fopen("tileRes.txt", "rt");
 
-		for (int i=0; i<numberOfTile; ++i) { // form left to right
-			for (int j=0; j<numberOfTile; ++j) { // from top to down
-				
-				printf("%d-%d processing\n", i,j);
+		char readedLine[MAX_BUF_SIZE];
 
-				int diffOfHistogram =0;
-				int minDiffOfHistogram =0;
-			
-				ImageShifterAmount curr, min;
-				curr.i =0;
-				curr.j =0;
-				min = curr;
-			
-				cv::Rect roi(wTileSize*(i+curr.i), hTileSize*(j+curr.j), wTileSize, hTileSize);
-				
-				cv::Mat tile1 = getSpecificRegionOfTheImage(edgeImage1, roi);
-				getHOGFeatures1(tile1, hist1);
-				
-				if (HOG == differecenceAlgo) {
-					// default tile
-					cv::Mat tile2 = getSpecificRegionOfTheImage(edgeImage2, roi);
-					
-					getHOGFeatures1(tile2, hist2);
-
-					cv::imwrite("tiles//tile1.jpg", tile1);
-				    cv::imwrite("tiles//tile2.jpg", tile2);
-
-					diffOfHistogram = calcDiffHistogram(hist1, hist2);
-					minDiffOfHistogram = diffOfHistogram;
-
-					// apply HOG all possible neighboor to get min diff
-					
-					#define SET_DIF_VALUE roi = cv::Rect(wTileSize*(i+curr.i), hTileSize*(j+curr.j), wTileSize, hTileSize); \
-										  cv::Mat tile2 = getSpecificRegionOfTheImage(edgeImage2, roi);						\
-																															\
-										  getHOGFeatures1(tile2, hist2);													\
-										  diffOfHistogram = calcDiffHistogram(hist1, hist2);								\
-																															\
-																															\
-										  if (diffOfHistogram < minDiffOfHistogram) {										\
-												minDiffOfHistogram = diffOfHistogram;										\
-												min = curr;																	\
-												cv::imwrite("tiles//tile1.jpg", tile1);										\
-												cv::imwrite("tiles//tile2.jpg", tile2);										\
-										  }																					\
-																															\
-									      tile2.release();
-
-					// -->
-					if (i != numberOfTile-1) {
-						curr.i = SHIFTER_AMOUNT;
-						curr.j = 0;
-						
-						SET_DIF_VALUE
-					}
-
-					//    -->
-					//   |
-					//   V
-
-					if ( !(i == numberOfTile-1 || j == numberOfTile-1) ) {
-						curr.i = SHIFTER_AMOUNT;
-						curr.j = SHIFTER_AMOUNT;
-						
-						SET_DIF_VALUE
-					}
-
-					//   |
-					//   V
-					if (j != numberOfTile-1) {
-						curr.i = 0;
-						curr.j = SHIFTER_AMOUNT;
-
-						SET_DIF_VALUE
-					}
-
-					//  < --
-					//     |
-					//     V
-					if ( !(i == 0 || j == numberOfTile-1) ) {
-						curr.i = -SHIFTER_AMOUNT;
-						curr.j = SHIFTER_AMOUNT;
-
-						SET_DIF_VALUE
-					}
-
-					// <--
-					if (0 != i) {
-						curr.i = -SHIFTER_AMOUNT;
-						curr.j = 0;
-
-						SET_DIF_VALUE
-					}
-
-					//    ^
-					//    |
-					// <--
-					if ( !(i == 0 || j == 0) ) {
-						curr.i = -SHIFTER_AMOUNT;
-						curr.j = -SHIFTER_AMOUNT;
-
-						SET_DIF_VALUE
-					}
-					
-					//  ^ 
-					//  |
-					if ( j != 0) {
-						curr.i = 0;
-						curr.j = -SHIFTER_AMOUNT;
-
-						SET_DIF_VALUE
-					}
-
-					//  ^ 
-					//  |__>
-					if ( !(j == 0 || i == numberOfTile-1) ) {
-						curr.i = SHIFTER_AMOUNT;
-						curr.j = -SHIFTER_AMOUNT;
-
-						SET_DIF_VALUE
-					}
-
-					#undef SET_DIF_VALUE
-				} // end of The if (HOG == differenceAlgo)	
-
-				sprintf(diffHist, "%d", minDiffOfHistogram);
-
-				int lineSize = (img1.cols/900) * (img1.rows/900);
-				if (minDiffOfHistogram > 1100) {
-					cv::line(img1, cv::Point(wTileSize*i, hTileSize*j), cv::Point(wTileSize*(i+1), hTileSize*j),
-							cv::Scalar(255,0,0), lineSize);
-					cv::line(img1, cv::Point(wTileSize*(i+1), hTileSize*j), cv::Point(wTileSize*(i+1), hTileSize*(j+1)),
-							cv::Scalar(255,0,0), lineSize);
-					cv::line(img1, cv::Point(wTileSize*i, hTileSize*(j+1)), cv::Point(wTileSize*(i+1), hTileSize*(j+1)),
-							cv::Scalar(255,0,0), lineSize);
-					cv::line(img1, cv::Point(wTileSize*i, hTileSize*j), cv::Point(wTileSize*i, hTileSize*(j+1)),
-							cv::Scalar(255,255,0), lineSize);
-
-					cv::line(img2, cv::Point(wTileSize*(i+min.i), hTileSize*(j+min.j)), cv::Point(wTileSize*((i+min.i)+1), hTileSize*(j+min.j)),
-							cv::Scalar(255,0,0), lineSize);
-					cv::line(img2, cv::Point(wTileSize*((i+min.i)+1), hTileSize*(j+min.j)), cv::Point(wTileSize*((i+min.i)+1), hTileSize*((j+min.j)+1)),
-							cv::Scalar(255,0,0), lineSize);
-					cv::line(img2, cv::Point(wTileSize*(i+min.i), hTileSize*((j+min.j)+1)), cv::Point(wTileSize*((i+min.i)+1), hTileSize*((j+min.j)+1)),
-							cv::Scalar(255,0,0), lineSize);
-					cv::line(img2, cv::Point(wTileSize*(i+min.i), hTileSize*(j+min.j)), cv::Point(wTileSize*(i+min.i), hTileSize*((j+min.j)+1)),
-							cv::Scalar(255,0,0), lineSize);
-					
-					putText(img1, diffHist, cv::Point(wTileSize*(i+0.1), hTileSize*(j+0.5)), cv::FONT_HERSHEY_COMPLEX_SMALL, lineSize+1,
-							cv::Scalar(255,255,0), lineSize+1, CV_AA);
-					putText(img2, diffHist, cv::Point(wTileSize*(i+0.1), hTileSize*(j+0.5)), cv::FONT_HERSHEY_COMPLEX_SMALL, lineSize+1, 
-							cv::Scalar(255,255,0), lineSize+1, CV_AA);
-
-				}
-				
-				printf("%d-%d done\n", i,j);
-				sprintf(sheetName, "%d-%d", i, j);
-  				sheet = xls.GetWorksheet(i*numberOfTile+j);
-				ExcelFormat::XLSFormatManager fmt_mgr(xls);
-				sheet->Rename(sheetName);
-			
-				(sheet->Cell(0,0))->SetFormat(fmt_bold);
-				(sheet->Cell(0,1))->SetFormat(fmt_bold);
-				(sheet->Cell(0,0))->Set("RgbPano");
-				(sheet->Cell(0,1))->Set("RgbImage");
-
-				// histogram data is printed to excel file
-				printHistogramExcel(hist1, hist2, sheet);
-				
-				// cv::imshow("tile1", tile1); cv::imshow("tile2", tile2); 
-				// cv::imshow("image1", img1); cv::imshow("image2", img2); cv::waitKey();
-				
-			}
+		for (int i=0; i<5; ++i) {
+			fgets(readedLine, MAX_BUF_SIZE, resFilePtr);
+			fprintf(stdout, "%s\n", readedLine);
 		}
 
+		fscanf(resFilePtr, "%d%d", &wTileSize, &hTileSize);
+		fscanf(resFilePtr, "%*c");
+		
+		fprintf(stdout, "tile size w:%d h:%d\n", wTileSize, hTileSize);
 
+		int wPoint1 =0,
+			hPoint1 =0,
+			wPoint2 =0,
+			hPoint2 =0;
+
+		int difference =0;
+		int lineSize =(img1.cols/900) * (img1.rows/900);
+
+		for (int i=0; i<numberOfTile*numberOfTile; ++i) {
+			fscanf(resFilePtr, "%d%d%d%d", &wPoint1, &hPoint1, &wPoint2, &hPoint2);
+			fscanf(resFilePtr, "%d", &difference);
+
+			cv::line(img1, cv::Point(wPoint1, hPoint1), cv::Point(wPoint1+wTileSize, hPoint1),
+						cv::Scalar(255, 255, 0), lineSize);
+			cv::line(img1, cv::Point(wPoint1, hPoint1), cv::Point(wPoint1, hPoint1+hTileSize),
+						cv::Scalar(255, 255, 0), lineSize);
+			cv::line(img1, cv::Point(wPoint1+wTileSize, hPoint1), cv::Point(wPoint1+wTileSize, hPoint1+hTileSize),
+						cv::Scalar(255, 255, 0), lineSize);
+			cv::line(img1, cv::Point(wPoint1, hPoint1+hTileSize), cv::Point(wPoint1+wTileSize, hPoint1+hTileSize),
+						cv::Scalar(255, 255, 0), lineSize);
+
+			cv::line(img2, cv::Point(wPoint2, hPoint2), cv::Point(wPoint2, hPoint2+hTileSize),
+						cv::Scalar(255,255,0), lineSize);
+			cv::line(img2, cv::Point(wPoint2, hPoint2), cv::Point(wPoint2+wTileSize, hPoint2),
+						cv::Scalar(255,255,0), lineSize);
+			cv::line(img2, cv::Point(wPoint2, hPoint2+hTileSize), cv::Point(wPoint2+wTileSize, hPoint2+hTileSize),
+						cv::Scalar(255,255,0), lineSize);
+			cv::line(img2, cv::Point(wPoint2+wTileSize, hPoint2), cv::Point(wPoint2+wTileSize, hPoint2+hTileSize),
+						cv::Scalar(255,255,0), lineSize);
+
+			sprintf(diffHist, "%d", difference);
+
+			if (difference>1100) {
+				putText(img1, diffHist, cv::Point(wPoint1+wTileSize*0.1, hPoint1+hTileSize*0.5), cv::FONT_HERSHEY_COMPLEX_SMALL, lineSize+1,
+						cv::Scalar(255, 255, 0), lineSize+1, CV_AA);
+
+				putText(img2, diffHist, cv::Point(wPoint2+wTileSize*0.1, hPoint2+hTileSize*0.5), cv::FONT_HERSHEY_COMPLEX_SMALL, lineSize+1,
+						cv::Scalar(255, 255, 0), lineSize+1, CV_AA);
+			}
+
+			printf("%d %d %d %d\n", wPoint1, hPoint1, wPoint2, hPoint2);
+			printf("%d\n\n", difference);
+		}
+
+		outputs.edgeMap1 =edgeImage1;
+		outputs.edgeMap2 =edgeImage2;
 		outputs.difImage1 =img1;
 		outputs.difImage2 =img2;
-		outputs.histogram = xls;
+		outputs.histogram =xls;
+		fclose( resFilePtr );
 
 #if defined( DEBUG )
 		xls.SaveAs("histograms.xls");
