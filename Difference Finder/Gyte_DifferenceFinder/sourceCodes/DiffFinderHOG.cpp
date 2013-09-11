@@ -13,10 +13,10 @@
 
 #include <iostream>
 #include <string>
+#include <ctime>
+#include <vector>
 
 #include "common.h"
-
-#include <ctime>
 
 #define MAX_PATH_LENGTH 300
 #define MINIMUM_GRAD_MAGNITUDE_FOR_ORIENTATION 0.001
@@ -24,10 +24,11 @@
 
 #define SHIFTER_AMOUNT 0.05
 
-#define MAX_BUF_SIZE 250
+#define DEFAULT_RATIO 3
+#define DEFAULT_THRESHOLD 1350
+#define DECREASE_SIZE 50
 
-double ratio_1 =3, ratio_2 =3;
-int threshold_1 =950, threshold_2 =1350;
+#define MAX_BUF_SIZE 250
 
 #if defined(MIN)
 	#undef MIN
@@ -42,6 +43,15 @@ typedef struct {
 	double i;
 	double j;
 } ImageShifterAmount;
+
+typedef struct {
+	int wPoint1;
+	int hPoint1;
+	int wPoint2;
+	int hPoint2;
+
+	int difference;
+} Tile;
 
 namespace {
 	// functions declerations
@@ -450,28 +460,17 @@ namespace {
 		cv::Mat hist1;
 		cv::Mat hist2;
 		
+		double ratio_1 =DEFAULT_RATIO, 
+			   ratio_2 =DEFAULT_RATIO;
+
+		int threshold_1 =DEFAULT_THRESHOLD,
+			threshold_2 =DEFAULT_THRESHOLD;
+
 		cv::Mat img1 =image1.clone();
 		cv::Mat img2 =image2.clone();
 		
-		cv::Mat edgeImage1 =getEdgeImage(image1, ratio_1, threshold_1);
-		cv::Mat edgeImage2 =getEdgeImage(image2, ratio_2, threshold_2);
-
-		edgeImage1 = dilate(edgeImage1, 3, 3);
-		edgeImage2 = dilate(edgeImage2, 3, 3);
-
-		cv::imwrite("edgeMap1.bmp", edgeImage1);
-		cv::imwrite("edgeMap2.bmp", edgeImage2);
-		
-		getHOGFeatures1(edgeImage1, hist1);
-		getHOGFeatures1(edgeImage2, hist2);
-
-		fprintf(stdout, "Histogram dif of the Images %d\n", calcDiffHistogram(hist1, hist2));
-		
-		// edgeImage1 = dilate(edgeImage1, 3, 3);
-		// edgeImage2 = dilate(edgeImage2, 3, 3);
-
-		cv::cvtColor(edgeImage1, edgeImage1, CV_RGB2GRAY);
-		cv::cvtColor(edgeImage2, edgeImage2, CV_RGB2GRAY);
+		cv::Mat edgeImage1;
+		cv::Mat edgeImage2;
 
 #if defined (DEBUG)
 		cv::imwrite("edgeImage1.jpg", edgeImage1);
@@ -495,47 +494,99 @@ namespace {
 	     
 		xls.New(numberOfTile*numberOfTile);
 
-		int hTileSize = image1.rows;
-		hTileSize /= numberOfTile;
-	
-		int wTileSize = image1.cols;
-		wTileSize /= numberOfTile;
-
+		int hTileSize =0,
+			wTileSize =0;
+		
 		FILE *resFilePtr = fopen("tileRes.txt", "w");
 
 		if (NULL == resFilePtr) {
 			fprintf(stderr, "ERROR getDifference function: resFile.txt Can Not Created !\n");
 			return outputs;
 		}
-
 #if defined (DEBUG)
 		cv::imshow("image1", img1);
 		cv::imshow("image2", img2);
 		cv::waitKey(0);
 #endif
-		processImageTileByTile(edgeImage1, edgeImage2, 5, xls, resFilePtr);
-		fclose( resFilePtr );
-		resFilePtr = fopen("tileRes.txt", "rt");
-
-		char readedLine[MAX_BUF_SIZE];
-
-		for (int i=0; i<5; ++i) {
-			fgets(readedLine, MAX_BUF_SIZE, resFilePtr);
-			fprintf(stdout, "%s\n", readedLine);
-		}
-
-		fscanf(resFilePtr, "%d%d", &wTileSize, &hTileSize);
-		fscanf(resFilePtr, "%*c");
 		
-		fprintf(stdout, "tile size w:%d h:%d\n", wTileSize, hTileSize);
+		char readedLine[MAX_BUF_SIZE];
 
 		int wPoint1 =0,
 			hPoint1 =0,
 			wPoint2 =0,
 			hPoint2 =0;
 
-		int difference =0;
+		int difference =0,
+			totalDifference =0;
 		int lineSize =(img1.cols/900) * (img1.rows/900);
+
+		int numberOfTheDifferentHistogram =0;
+			
+		do {
+			numberOfTheDifferentHistogram = totalDifference =0;
+
+			edgeImage1 =getEdgeImage(image1, ratio_1, threshold_1);
+			edgeImage2 =getEdgeImage(image2, ratio_2, threshold_2);
+
+			cv::cvtColor(edgeImage1, edgeImage1, CV_RGB2GRAY);
+			cv::cvtColor(edgeImage2, edgeImage2, CV_RGB2GRAY);
+
+			edgeImage1 = dilate(edgeImage1, 3, 3);
+			edgeImage2 = dilate(edgeImage2, 3, 3);
+
+
+			resFilePtr = fopen("tileRes.txt", "w");
+
+			if (NULL == resFilePtr) {
+				fprintf(stderr, "ERROR getDifference function: resFile.txt Can Not Created !\n");
+				return outputs;
+			}
+
+			cv::imwrite("edgeMap1.bmp", edgeImage1);
+			cv::imwrite("edgeMap2.bmp", edgeImage2);
+
+			processImageTileByTile(edgeImage1, edgeImage2, 5, xls, resFilePtr);
+			fclose( resFilePtr );
+			resFilePtr = fopen("tileRes.txt", "rt");
+
+			for (int i=0; i<5; ++i) {
+				fgets(readedLine, MAX_BUF_SIZE, resFilePtr);
+			}
+
+			fscanf(resFilePtr, "%d%d", &wTileSize, &hTileSize);
+			fscanf(resFilePtr, "%*c");
+
+			for (int i=0; i<numberOfTile*numberOfTile; ++i) {
+				fscanf(resFilePtr, "%d%d%d%d", &wPoint1, &hPoint1, &wPoint2, &hPoint2);
+				fscanf(resFilePtr, "%d", &difference);
+
+				totalDifference += difference;
+
+				if (difference > 1100)
+					++numberOfTheDifferentHistogram;
+			}
+			
+			if ( 750 == threshold_1 ) {
+				threshold_2 -= DECREASE_SIZE;
+				threshold_1 = DEFAULT_THRESHOLD;
+			} else 
+				threshold_1 -= DECREASE_SIZE;
+
+			fclose( resFilePtr );
+
+		} while(numberOfTheDifferentHistogram != 4);
+
+		cv::imwrite("edgeMap1.bmp", edgeImage1);
+		cv::imwrite("edgeMap2.bmp", edgeImage2);
+
+		fclose( resFilePtr );
+		resFilePtr = fopen("tileRes.txt", "rt");
+
+		for (int i=0; i<5; ++i)
+			fgets(readedLine, MAX_BUF_SIZE, resFilePtr);
+
+		fscanf(resFilePtr, "%d%d", &wTileSize, &hTileSize);
+		fscanf(resFilePtr, "%*c");
 
 		for (int i=0; i<numberOfTile*numberOfTile; ++i) {
 			fscanf(resFilePtr, "%d%d%d%d", &wPoint1, &hPoint1, &wPoint2, &hPoint2);
@@ -561,17 +612,16 @@ namespace {
 
 			sprintf(diffHist, "%d", difference);
 
-			if (difference>1100) {
+			if (difference>-1100) { // it is fake if statement to see all result for now
 				putText(img1, diffHist, cv::Point(wPoint1+wTileSize*0.1, hPoint1+hTileSize*0.5), cv::FONT_HERSHEY_COMPLEX_SMALL, lineSize+1,
 						cv::Scalar(255, 255, 0), lineSize+1, CV_AA);
 
 				putText(img2, diffHist, cv::Point(wPoint2+wTileSize*0.1, hPoint2+hTileSize*0.5), cv::FONT_HERSHEY_COMPLEX_SMALL, lineSize+1,
 						cv::Scalar(255, 255, 0), lineSize+1, CV_AA);
-			}
+			} // end of if (difference > 1100)
+		} // end of for i
 
-			printf("%d %d %d %d\n", wPoint1, hPoint1, wPoint2, hPoint2);
-			printf("%d\n\n", difference);
-		}
+		fprintf(stderr, "average difference: %d\n", totalDifference/(numberOfTile*numberOfTile) );
 
 		outputs.edgeMap1 =edgeImage1;
 		outputs.edgeMap2 =edgeImage2;
