@@ -6,6 +6,8 @@
  *
  */
 
+
+
 #include <opencv2\highgui\highgui.hpp>
 
 #include <opencv2\nonfree\nonfree.hpp>
@@ -18,6 +20,8 @@
 #include "RegisterImage.h"
 #include "DiffFinderHOG.h"
 #include "common.h"
+
+#if 0
 
 namespace {
 	
@@ -96,8 +100,9 @@ namespace {
 	}
 
 }
+#endif
 
-#if 0
+#if 1
 	#include <iostream>
 	#include <vector>
 
@@ -112,7 +117,7 @@ namespace {
 		return dst;
 	}
 
-	Mat orientationMap(const cv::Mat& mag, const cv::Mat& ori, double thresh = 1.0)
+	Mat orientationMap(const cv::Mat& mag, const cv::Mat& ori, double thresh = 2.0)
 	{
 		Mat oriMap = Mat::zeros(ori.size(), CV_8UC3);
 		Vec3b red(0, 0, 255);
@@ -144,11 +149,11 @@ namespace {
 					++arr[3];
 				}
 			}
-		}
+		} // end of for statements
 
 		FILE* edges = fopen("edges.txt", "a");
 
-		fprintf(edges, "%d-%d-%d-%d\n", arr[0], arr[1], arr[2], arr[3]);
+		fprintf(edges, "\n%d-%d-%d-%d", arr[0], arr[1], arr[2], arr[3]);
 	
 		fclose(edges);
 	
@@ -164,8 +169,11 @@ namespace {
 	
 	
 		// Mat image = cv::imread("C:\\Users\\Coker\\Documents\\Difference Finder\\Gyte_DifferenceFinder\\Resources\\1\\ImageMatch.jpg");
-		Mat image = imread("image2.png");
-
+		Mat image = imread("C:\\Users\\Coker\\Dropbox\\MustafaCalisma\\tests\\test1\\registered\\PanoMatch.JPG");
+		// image = mat2gray(image);
+		GaussianBlur(image, image, cv::Size(5, 5), 0,0);
+		cvtColor(image, image, CV_RGB2GRAY);
+		
 		// imwrite("image.jpg", image);
 		imshow("original", image);
 
@@ -179,16 +187,26 @@ namespace {
 		magnitude(Sx, Sy, mag);
 		phase(Sx, Sy, ori, true);
 
-		Mat oriMap = orientationMap(mag, ori, 50.0);
-	
-		imshow("Sx", Sx);
-		imshow("Sy", Sy);
+		Mat oriMap = orientationMap(mag, ori, 25.0);
+		ori = mat2gray(ori);
+		GaussianBlur(ori, ori, cv::Size(5, 5), 0,0);
 
+		imwrite("temp//magnitude.bmp", mat2gray(mag));
+		imwrite("temp//orientation.bmp", ori);
+		imwrite("temp//oriMap.bmp", oriMap);
+		imwrite("temp//Sx.bmp", Sx);
+		imwrite("temp//Sy.bmp", Sy);
+
+		/*
 		imshow("magnitude", mat2gray(mag));
 		imshow("orientation", mat2gray(ori));
 		imshow("orientation map", oriMap);
-		waitKey();
-	
+		imshow("Sx", Sx);
+		imshow("Sy", Sy);
+
+		waitKey();		
+		*/
+
 		/*
 		imwrite("Sx.jpg", Sx);
 		imwrite("Sy.jpg", Sy);
