@@ -21,7 +21,7 @@
 #include "DiffFinderHOG.h"
 #include "common.h"
 
-#if 0
+#if 1
 
 namespace {
 	
@@ -43,8 +43,8 @@ int main(void)
 	registeration.getAffineRect(im2, temp);
 	*/
 	
-	char *inputPath = new char[MAX_PATH_LENGTH];
-	char *outputPath = new char[MAX_PATH_LENGTH];
+	char *inputPath =new char[ MAX_PATH_LENGTH ];
+	char *outputPath =new char[ MAX_PATH_LENGTH ];
 	
 	printf("Please Enter the input images path:\n");
 	gets(inputPath);
@@ -57,8 +57,8 @@ int main(void)
 
 	std::string ImageMatchPath(inputPath), panoMatchPath(inputPath);
 
-	ImageMatchPath += "\\ImageMatch.jpg";
-	panoMatchPath += "\\PanoMatch.jpg";
+	ImageMatchPath += "\\ImageMatch.JPG";
+	panoMatchPath += "\\PanoMatch.JPG";
 	
 	cv::Mat pano =cv::imread(ImageMatchPath.data());
 	cv::Mat rgb =cv::imread(panoMatchPath.data());
@@ -99,10 +99,10 @@ namespace {
 		return;
 	}
 
-}
+} // end of unnamed namespace
 #endif
 
-#if 1
+#if 0
 	#include <iostream>
 	#include <vector>
 
@@ -167,10 +167,10 @@ namespace {
 		// circle(image, Point(160, 120), 75, Scalar(155, 125, 155), -1, CV_AA);
 		// rectangle(image, Rect(10, 10, 150, 150), Scalar(155,155,155), 10);
 	
-	
+		
 		// Mat image = cv::imread("C:\\Users\\Coker\\Documents\\Difference Finder\\Gyte_DifferenceFinder\\Resources\\1\\ImageMatch.jpg");
 		Mat image = imread("C:\\Users\\Coker\\Dropbox\\MustafaCalisma\\tests\\test1\\registered\\PanoMatch.JPG");
-		// image = mat2gray(image);
+		image = mat2gray(image);
 		GaussianBlur(image, image, cv::Size(5, 5), 0,0);
 		cvtColor(image, image, CV_RGB2GRAY);
 		
