@@ -20,9 +20,10 @@
 #include "common.h"
 
 namespace {
-	
 	void configurePath(char** path, int size);
-
+	void testSmooth(void);
+	cv::Mat erade(const cv::Mat& src, const int eradeSize, const int eradeType);
+	cv::Mat dilate(const cv::Mat& src, const int dilationSize, const int dilationType);
 }
 
 int main(void)
@@ -39,6 +40,9 @@ int main(void)
 	registeration.getAffineRect(im2, temp);
 	*/
 	
+	// testSmooth();
+	// return 0;
+
 	char *inputPath = new char[MAX_PATH_LENGTH];
 	char *outputPath = new char[MAX_PATH_LENGTH];
 	
@@ -69,6 +73,73 @@ int main(void)
 }
 
 namespace {
+	
+	cv::Mat erade(const cv::Mat& src, const int eradeSize, const int eradeType) {
+		cv::Mat eroded;
+		cv::Mat config;
+
+		config = getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(2*eradeSize, 2*eradeSize),
+									   cv::Point(eradeSize, eradeSize));
+		// cv::erode(src, eroded, config);
+		cv::erode(src, eroded, cv::Mat(), cv::Point(-1, -1), eradeSize);
+
+		return eroded;
+	}
+
+	cv::Mat dilate(const cv::Mat& src, const int dilationSize, const int dilationType) {
+		cv::Mat dilated;
+		cv::Mat config;
+
+		config = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(2*dilationSize+1, 2*dilationSize+1), 
+									       cv::Point(dilationSize, dilationSize));
+		dilate(src, dilated, config);
+		return dilated;
+	}
+
+	void testSmooth(void) {
+		cv::Mat im1, im2, im1Smooth, im2Smooth;
+		im1 =cv::imread("ImageMatch.JPG");
+		im2 =cv::imread("PanoMatch.JPG");
+
+		cv::Mat kernel;
+		kernel = cv::Mat::ones(5,5,CV_32F)/(float)(5*5);
+
+		cv::GaussianBlur(im1, im1Smooth, cv::Size(11, 11), 0,0);
+		cv::GaussianBlur(im2, im2Smooth, cv::Size(11, 11), 0,0);
+
+		cv::Mat res1 = im1Smooth - im1,
+				res2 = im2 - im2Smooth;
+
+		res1 = erade(res1, 1, 1);
+		res2 = erade(res2, 1, 1);
+
+		res1 = dilate(res1, 3, 3);
+		res2 = dilate(res2, 3, 3);
+
+		cv::GaussianBlur(res1, im1Smooth, cv::Size(11, 11), 0,0);
+		cv::GaussianBlur(res2, im2Smooth, cv::Size(11, 11), 0,0);
+
+		res1 = im1Smooth - res1;
+		res2 = im2Smooth - res2;
+	
+		// res1 = dilate(res1, 3, 3);
+		// res2 = dilate(res2, 3, 3);
+
+		cv::namedWindow("ImageMatch", cv::WINDOW_NORMAL);
+		cv::namedWindow("PanoMatch", cv::WINDOW_NORMAL);
+		cv::namedWindow("Dif1", cv::WINDOW_NORMAL);
+		cv::namedWindow("Dif2", cv::WINDOW_NORMAL);
+
+		cv::imwrite("dif1.bmp", res1);
+		cv::imwrite("dif2.bmp", res2);
+
+		cv::imshow("ImageMatch", im1);
+		cv::imshow("PanoMatch", im2);
+		cv::imshow("Dif1", res1);
+		cv::imshow("Dif2", res2);
+		cv::waitKey();
+
+	}
 
 	void configurePath(char** path, int size) {
 		char *res =new char[ sizeof(char)*MAX_PATH_LENGTH ];

@@ -226,7 +226,9 @@ namespace {
 
 		config = getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(2*eradeSize, 2*eradeSize),
 									   cv::Point(eradeSize, eradeSize));
-		cv::erode(src, eroded, config);
+		
+		// cv::erode(src, eroded, config);
+		cv::erode(src, eroded, cv::Mat(), cv::Point(-1, -1), eradeSize);
 
 		return eroded;
 	}
@@ -456,6 +458,9 @@ namespace {
 		cv::Mat edgeImage1 =getEdgeImage(image1, ratio_1, threshold_1);
 		cv::Mat edgeImage2 =getEdgeImage(image2, ratio_2, threshold_2);
 
+		// edgeImage1 = erade(edgeImage1, 1, 3);
+		// edgeImage2 = erade(edgeImage2, 1, 3);
+
 		edgeImage1 = dilate(edgeImage1, 3, 3);
 		edgeImage2 = dilate(edgeImage2, 3, 3);
 
@@ -569,8 +574,8 @@ namespace {
 						cv::Scalar(255, 255, 0), lineSize+1, CV_AA);
 			}
 
-			printf("%d %d %d %d\n", wPoint1, hPoint1, wPoint2, hPoint2);
-			printf("%d\n\n", difference);
+			// printf("%d %d %d %d\n", wPoint1, hPoint1, wPoint2, hPoint2);
+			// printf("%d\n\n", difference);
 		}
 
 		outputs.edgeMap1 =edgeImage1;
@@ -651,7 +656,6 @@ namespace {
 			}
 		}
 
-		
 		// normalize magnitude image to 1...
 		for (r=0;r<InputImage.rows;r++) {
 			for (c=0;c<InputImage.cols;c++) {
