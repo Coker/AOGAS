@@ -22,13 +22,19 @@
 #define MINIMUM_GRAD_MAGNITUDE_FOR_ORIENTATION 0.001
 #define PI 3.14159265
 
+// Tile shifter amount for searching appropriate tile
 #define SHIFTER_AMOUNT 0.05
 
+// Canny parap-meters
 #define DEFAULT_RATIO 4
 #define DEFAULT_THRESHOLD 50
 #define DECREASE_SIZE 50
 
+// generic buffer size constant
 #define MAX_BUF_SIZE 250
+
+// Edge searching and matching steps distance threshold
+#define DISTANCE_BETWEEN_2_POINT_THRESHOLD 20
 
 #if defined(MIN)
 	#undef MIN
@@ -71,7 +77,11 @@ namespace {
 	int processImageTileByTile (const cv::Mat& image1, const cv::Mat& image2, int numberOfTile,
 								ExcelFormat::BasicExcel& xls, FILE* fPtr);
 	int getSumOfTheHistogram(const cv::Mat& hist);
-	cv::Mat getHoughLines(const cv::Mat& image);
+	std::vector<cv::Vec4i> getHoughLines(const cv::Mat& image);
+	bool isParallelToEdge(const int wSize, const int hSize, const cv::Point& pt1, const cv::Point& pt2);
+	void matchTheEdges(cv::Mat& roi1, cv::Mat& roi2,
+					   const std::vector<cv::Vec4i>& lines1, const std::vector<cv::Vec4i>& line2);
+	int getEuclidianDistanceBetween2Points(const cv::Point& p1, const cv::Point& p2);
 } // end of unnamed namespace
 
 GYTE_DIFF_FINDER::DiffFinderHOG::DiffFinderHOG() : DiffFinder() {
@@ -458,11 +468,50 @@ namespace {
 		return 0;
 	}
 
-	cv::Mat getHoughLines(const cv::Mat& image) {
+	bool isParallelToEdge(const int wSize, const int hSize, const cv::Point& pt1, const cv::Point& pt2) {
 		
+		const int BORDER_NEAR_THRESHOLD =20;
+		
+		fprintf(stderr, "wSize %d\nhSize %d\n pt1x %d\n pt1y %d\n", wSize, hSize, pt1.x, pt1.y);
+
+		if ( (pt1.x < BORDER_NEAR_THRESHOLD) &&
+			 (pt2.x < BORDER_NEAR_THRESHOLD) ) {
+			fprintf(stderr, "    pt1.x < BORDER_NEAR_THRESHOLD %d\n", pt1.x );
+			return false;
+		}
+		
+		if ( ((wSize - pt1.x) < BORDER_NEAR_THRESHOLD) &&
+			 ((wSize - pt2.x) < BORDER_NEAR_THRESHOLD) ) {
+			fprintf(stderr, "    0 < (wSize - pt1.x) < BORDER_NEAR_THRESHOLD %d %d\n", (wSize - pt1.x), BORDER_NEAR_THRESHOLD);
+			return false;
+		}
+		
+		if ( (pt1.y < BORDER_NEAR_THRESHOLD) &&
+			 (pt2.y < BORDER_NEAR_THRESHOLD) ) {
+			fprintf(stderr, "pt1.y < BORDER_NEAR_THRESHOLD %d\n", pt1.y);
+			return false;
+		}
+			
+
+		if ( ((hSize - pt1.y) < BORDER_NEAR_THRESHOLD) &&
+			 ((hSize - pt2.y) < BORDER_NEAR_THRESHOLD)) {
+			fprintf(stderr, "    0 < (hSize - pt1.y) < BORDER_NEAR_THRESHOLD %d\n", (hSize - pt1.y));
+			return false;
+		}
+			
+		fprintf(stderr, "    true\n");
+
+		return true;
+	}
+
+	std::vector<cv::Vec4i> getHoughLines(const cv::Mat& image) {
+		
+		std::vector<cv::Vec4i> lines;
+
 		if (image.empty()) {
 			std::cerr << "ERROR getHoughLines: image is empty!\n";
-			scanf("");
+			scanf("%*c");
+			return lines;
 		}
 		
 		static int imageNum =0;
@@ -473,20 +522,61 @@ namespace {
 		cv::cvtColor(dest, cdest, CV_GRAY2BGR);
 				
 		cv::imwrite("CannyEdges.bmp", dest);
-
-		std::vector<cv::Vec4i> lines;
+		
 		cv::HoughLinesP(dest, lines, 1, CV_PI/360, 10, 20, 2);
 		
+
 		for( size_t i = 0; i < lines.size(); i++ ) {
 			cv::Vec4i l = lines[i];
-			cv::line(cdest, cv::Point(l[0], l[1]), cv::Point(l[2], l[3]), cv::Scalar(0,0,255), 3, CV_AA);
+			
+			if (isParallelToEdge(image.cols, image.rows,
+				cv::Point(l[0], l[1]), cv::Point(l[2], l[3])) ) {
+				// cv::line(cdest, cv::Point(l[0], l[1]), cv::Point(l[2], l[3]), cv::Scalar(0,0,255), 1, CV_AA);
+				lines.erase(lines.begin() + i);
+			}
+		} // end of for loop
+
+		return lines;
+	}
+
+	int getEuclidianDistanceBetween2Points(const cv::Point& p1, const cv::Point& p2) {
+		int distance =0;
+
+		distance = std::pow((p1.x - p2.x), 2) + std::pow((p1.y -p2.y), 2);
+		distance = std::sqrt(distance);
+
+		return distance;
+	}
+
+	void matchTheEdges(cv::Mat& roi1, cv::Mat& roi2, const std::vector<cv::Vec4i>& lines1, const std::vector<cv::Vec4i>& lines2) {
+		
+		int distance =0;
+
+		for (int i=0; i<lines1.size(); ++i) {
+			for (int j=0; j<lines2.size(); ++j) {
+				cv::Point st1( (lines1[i])[0], (lines1[i])[1] );
+				cv::Point fn1( (lines1[i])[2], (lines1[i])[3] );
+
+				cv::Point st2( (lines2[i])[0], (lines2[i])[1] );
+				cv::Point fn2( (lines2[i])[2], (lines2[i])[3] );
+
+				distance = getEuclidianDistanceBetween2Points(st1, st2);
+
+				if (DISTANCE_BETWEEN_2_POINT_THRESHOLD > distance) {
+					;
+				} else {
+					distance = getEuclidianDistanceBetween2Points(st1, fn2);
+
+					if (DISTANCE_BETWEEN_2_POINT_THRESHOLD > distance) {
+						;
+					}
+				}
+
+
+			}
 		}
 
-		// sprintf(imageName, "lineMaps//lineMap%d.bmp", imageNum);
-
-		// cv::imwrite(imageName, cdest);
-
-		return cdest;
+		return;
 	}
 
 	GYTE_DIFF_FINDER::difoutputs getDifference(const cv::Mat& const image1, const cv::Mat& const image2,
@@ -494,10 +584,10 @@ namespace {
 	
 		GYTE_DIFF_FINDER::difoutputs outputs;
 		
-		outputs.difImage1 = cv::Mat();
-		outputs.difImage2 = cv::Mat();
-		outputs.edgeMap1 = cv::Mat();
-		outputs.edgeMap2 = cv::Mat();
+		outputs.difImage1 =cv::Mat();
+		outputs.difImage2 =cv::Mat();
+		outputs.edgeMap1 =cv::Mat();
+		outputs.edgeMap2 =cv::Mat();
 
 		if (image1.empty() || image2.empty()) {
 			std::cerr << "ERROR getDifference: Some Image File Have NOT set!\n Please set the Image\n";
@@ -677,17 +767,28 @@ namespace {
 			sprintf(diffHist, "%d", difference);
 
 			if (difference>500) {
-				
+				/*
 				cv::Rect tempTileRect(wPoint1, hPoint1, wTileSize, hTileSize);
 				cv::Mat tempTile =img1(tempTileRect);
 				cv::Mat lineMap =getHoughLines(tempTile);
 				lineMap.copyTo(img1(cv::Rect(wPoint1, hPoint1, wTileSize, hTileSize)));
 
-
 				tempTileRect =cv::Rect(wPoint2, hPoint2, wTileSize, hTileSize);
 				tempTile = img2(tempTileRect);
 				lineMap = getHoughLines(tempTile);
 				lineMap.copyTo(img2(cv::Rect(wPoint2, hPoint2, wTileSize, hTileSize)));
+				*/
+
+				cv::Rect tempTileRect1(wPoint1, hPoint1, wTileSize, hTileSize),
+						 tempTileRect2(wPoint2, hPoint2, wTileSize, hTileSize);
+
+				cv::Mat image1Roi = img1(tempTileRect1),
+						image2Roi = img2(tempTileRect2);
+
+				std::vector<cv::Vec4i> imageLines1 =getHoughLines(image1Roi),
+									   imageLines2 =getHoughLines(image2Roi);
+
+				matchTheEdges(image1Roi, image2Roi, imageLines1, imageLines2);
 
 				putText(img1, diffHist, cv::Point(wPoint1+wTileSize*0.1, hPoint1+hTileSize*0.5), cv::FONT_HERSHEY_COMPLEX_SMALL, lineSize+1,
 						cv::Scalar(255, 255, 0), lineSize+1, CV_AA);
@@ -695,8 +796,7 @@ namespace {
 				putText(img2, diffHist, cv::Point(wPoint2+wTileSize*0.1, hPoint2+hTileSize*0.5), cv::FONT_HERSHEY_COMPLEX_SMALL, lineSize+1,
 						cv::Scalar(255, 255, 0), lineSize+1, CV_AA);
 				
-				tempTile.release();
-				lineMap.release();
+				
 
 			} else {
 				putText(img1, diffHist, cv::Point(wPoint1+wTileSize*0.1, hPoint1+hTileSize*0.5), cv::FONT_HERSHEY_COMPLEX_SMALL, lineSize+1,
@@ -705,7 +805,6 @@ namespace {
 				putText(img2, diffHist, cv::Point(wPoint2+wTileSize*0.1, hPoint2+hTileSize*0.5), cv::FONT_HERSHEY_COMPLEX_SMALL, lineSize+1,
 						cv::Scalar(0, 0, 0), lineSize+1, CV_AA);
 			}
-
 
 
 		} // end of for i
