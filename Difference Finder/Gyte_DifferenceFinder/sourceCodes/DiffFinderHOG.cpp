@@ -34,7 +34,7 @@
 #define MAX_BUF_SIZE 250
 
 // Edge searching and matching steps distance threshold
-#define DISTANCE_BETWEEN_2_POINT_THRESHOLD 20
+#define DISTANCE_BETWEEN_2_POINT_THRESHOLD 50
 
 #if defined(MIN)
 	#undef MIN
@@ -79,9 +79,10 @@ namespace {
 	int getSumOfTheHistogram(const cv::Mat& hist);
 	std::vector<cv::Vec4i> getHoughLines(const cv::Mat& image);
 	bool isParallelToEdge(const int wSize, const int hSize, const cv::Point& pt1, const cv::Point& pt2);
-	void matchTheEdges(cv::Mat& roi1, cv::Mat& roi2,
-					   const std::vector<cv::Vec4i>& lines1, const std::vector<cv::Vec4i>& line2);
+	void matchTheEdges(cv::Mat& roi1, cv::Mat& roi2);
 	int getEuclidianDistanceBetween2Points(const cv::Point& p1, const cv::Point& p2);
+	void drawBorderObject(cv::Mat& image, const std::vector<cv::Vec4i>& lines);
+	void connectBorderLine(cv::Mat& image, const cv::Point& p, cv::Scalar color);
 } // end of unnamed namespace
 
 GYTE_DIFF_FINDER::DiffFinderHOG::DiffFinderHOG() : DiffFinder() {
@@ -525,7 +526,8 @@ namespace {
 		
 		cv::HoughLinesP(dest, lines, 1, CV_PI/360, 10, 20, 2);
 		
-
+		// bu döngüye þu an gerek kalmadý
+		/*
 		for( size_t i = 0; i < lines.size(); i++ ) {
 			cv::Vec4i l = lines[i];
 			
@@ -535,8 +537,120 @@ namespace {
 				lines.erase(lines.begin() + i);
 			}
 		} // end of for loop
-
+		*/
 		return lines;
+	}
+	void connectBorderLine(cv::Mat& image, const cv::Point& p, cv::Scalar color) {
+		std::vector<cv::Point> points;
+		cv::Point curr, neigb;
+		
+		points.push_back(p);
+
+		while(!points.empty()) {
+			fprintf(stderr, "connectBorder size %d\n", points.size());
+			curr = points.back();	
+			points.pop_back();
+
+			cv::line(image, curr, curr, color, 1);
+
+			neigb = cv::Point(curr.x+1, curr.y);
+
+			if (image.at<cv::Vec3b>(neigb.y, neigb.x)[0] > 245 &&
+				image.at<cv::Vec3b>(neigb.y, neigb.x)[1] > 245 &&
+				image.at<cv::Vec3b>(neigb.y, neigb.x)[2] > 245) {
+				
+				cv::line(image, neigb, neigb, color, 1);					
+				points.push_back(neigb);
+			}
+			
+
+			neigb = cv::Point(curr.x+1, curr.y+1);
+
+			if (image.at<cv::Vec3b>(neigb.y, neigb.x)[0] > 245 &&
+				image.at<cv::Vec3b>(neigb.y, neigb.x)[1] > 245 &&
+				image.at<cv::Vec3b>(neigb.y, neigb.x)[2] > 245){
+				
+				cv::line(image, neigb, neigb, color, 1);					
+				points.push_back(neigb);
+			}
+
+			neigb = cv::Point(curr.x, curr.y+1);
+
+			if (image.at<cv::Vec3b>(neigb.y, neigb.x)[0] > 245 &&
+				image.at<cv::Vec3b>(neigb.y, neigb.x)[1] > 245 &&
+				image.at<cv::Vec3b>(neigb.y, neigb.x)[2] > 245){
+				
+				cv::line(image, neigb, neigb, color, 1);					
+				points.push_back(neigb);
+			}
+
+			neigb = cv::Point(curr.x-1, curr.y+1);
+
+			if (image.at<cv::Vec3b>(neigb.y, neigb.x)[0] > 245 &&
+				image.at<cv::Vec3b>(neigb.y, neigb.x)[1] > 245 &&
+				image.at<cv::Vec3b>(neigb.y, neigb.x)[2] > 245){
+				
+				cv::line(image, neigb, neigb, color, 1);					
+				points.push_back(neigb);
+			}
+
+			neigb = cv::Point(curr.x-1, curr.y);
+
+			if (image.at<cv::Vec3b>(neigb.y, neigb.x)[0] > 245 &&
+				image.at<cv::Vec3b>(neigb.y, neigb.x)[1] > 245 &&
+				image.at<cv::Vec3b>(neigb.y, neigb.x)[2] > 245){
+				
+				cv::line(image, neigb, neigb, color, 1);					
+				points.push_back(neigb);
+			}
+
+			neigb = cv::Point(curr.x-1, curr.y-1);
+
+			if (image.at<cv::Vec3b>(neigb.y, neigb.x)[0] > 245 &&
+				image.at<cv::Vec3b>(neigb.y, neigb.x)[1] > 245 &&
+				image.at<cv::Vec3b>(neigb.y, neigb.x)[2] > 245){
+				
+				cv::line(image, neigb, neigb, color, 1);					
+				points.push_back(neigb);
+			}
+
+			neigb = cv::Point(curr.x, curr.y-1);
+
+			if (image.at<cv::Vec3b>(neigb.y, neigb.x)[0] > 245 &&
+				image.at<cv::Vec3b>(neigb.y, neigb.x)[1] > 245 &&
+				image.at<cv::Vec3b>(neigb.y, neigb.x)[2] > 245){
+				
+				cv::line(image, neigb, neigb, color, 1);					
+				points.push_back(neigb);
+			}
+
+			neigb = cv::Point(curr.x+1, curr.y-1);
+
+			if (image.at<cv::Vec3b>(neigb.y, neigb.x)[0] > 245 &&
+				image.at<cv::Vec3b>(neigb.y, neigb.x)[1] > 245 &&
+				image.at<cv::Vec3b>(neigb.y, neigb.x)[2] > 245){
+				
+				cv::line(image, neigb, neigb, color, 1);					
+				points.push_back(neigb);
+			}
+		}
+
+	}
+
+
+	void drawBorderObject(cv::Mat& image, const std::vector<cv::Vec4i>& lines) {
+		
+		for (int i=0; i<lines.size(); ++i) {
+			cv::Point p1( (lines[i])[0], (lines[i])[1]), // point 1
+					  p2( (lines[i])[2], (lines[i])[3]); // point 2
+
+			connectBorderLine(image, p1, BLUE);
+			connectBorderLine(image, p2, BLUE);
+		}
+		
+		cv::namedWindow("drawBorder", CV_WINDOW_NORMAL);
+		cv::imshow("drawBorder", image); cv::waitKey();
+
 	}
 
 	int getEuclidianDistanceBetween2Points(const cv::Point& p1, const cv::Point& p2) {
@@ -548,33 +662,75 @@ namespace {
 		return distance;
 	}
 
-	void matchTheEdges(cv::Mat& roi1, cv::Mat& roi2, const std::vector<cv::Vec4i>& lines1, const std::vector<cv::Vec4i>& lines2) {
+	void matchTheEdges(cv::Mat& roi1, cv::Mat& roi2) {
 		
+		if (roi1.empty() || roi2.empty()) {
+			std::cerr << "ERROR matchTheEdges: Parameters are empty !\n";
+			scanf("%*c");
+			std::exit(-1);
+		}
+
+		std::vector<cv::Vec4i> lines1 =getHoughLines(roi1),
+							   lines2 =getHoughLines(roi2);
+
 		int distance =0;
+
+		/*
+		cv::namedWindow("tile1", CV_WINDOW_NORMAL);
+		cv::namedWindow("tile2", CV_WINDOW_NORMAL);
+		*/
+
+		// fprintf(stderr, "	line1Size %d-line2Size %d\n", lines1.size(), lines2.size());
 
 		for (int i=0; i<lines1.size(); ++i) {
 			for (int j=0; j<lines2.size(); ++j) {
+				cv::Mat temp1 = roi1.clone();
+				cv::Mat temp2 = roi2.clone();
+
 				cv::Point st1( (lines1[i])[0], (lines1[i])[1] );
 				cv::Point fn1( (lines1[i])[2], (lines1[i])[3] );
 
-				cv::Point st2( (lines2[i])[0], (lines2[i])[1] );
-				cv::Point fn2( (lines2[i])[2], (lines2[i])[3] );
+				cv::Point st2( (lines2[j])[0], (lines2[j])[1] );
+				cv::Point fn2( (lines2[j])[2], (lines2[j])[3] );
 
 				distance = getEuclidianDistanceBetween2Points(st1, st2);
+				fprintf(stderr, "distance %d\n", distance);
+
+				cv::line(temp1, st1, fn1, GREEN, 3);
+				cv::line(temp2, st2, fn2, GREEN, 3);
+
+				// cv::imshow("tile1", temp1); cv::imshow("tile2", temp2); cv::waitKey();
 
 				if (DISTANCE_BETWEEN_2_POINT_THRESHOLD > distance) {
-					;
+					distance = getEuclidianDistanceBetween2Points(fn1, fn2);
+
+					if (DISTANCE_BETWEEN_2_POINT_THRESHOLD > distance) {
+						cv::line(roi1, st1, fn1, RED, 2);
+						cv::line(roi2, st2, fn2, RED, 2);
+					}
+
 				} else {
 					distance = getEuclidianDistanceBetween2Points(st1, fn2);
 
 					if (DISTANCE_BETWEEN_2_POINT_THRESHOLD > distance) {
-						;
+						distance = getEuclidianDistanceBetween2Points(fn1, st2);
+
+						if (DISTANCE_BETWEEN_2_POINT_THRESHOLD > distance) {
+							cv::line(roi1, st1, fn1, RED, 2);
+							cv::line(roi2, st2, fn2, RED, 2);
+						}
 					}
 				}
 
-
+				temp1.release();
+				temp2.release();
 			}
 		}
+
+		drawBorderObject(roi1, lines1);
+		drawBorderObject(roi2, lines2);
+
+		// cv::imshow("tile1Res", roi1); cv::imshow("tile2Res", roi2); cv::waitKey();
 
 		return;
 	}
@@ -592,13 +748,13 @@ namespace {
 		if (image1.empty() || image2.empty()) {
 			std::cerr << "ERROR getDifference: Some Image File Have NOT set!\n Please set the Image\n";
 			scanf("%*c");
-			return outputs;
+			std::exit(-1);
 		}
 
 		if (image1.cols != image2.cols || image1.rows != image2.rows) {
 			std::cerr << "ERROR getDifference: Images Not Registered !\n";
 			scanf("%*c");
-			return outputs;
+			std::exit(-1);
 		}
 
 		cv::Mat gaussian1, gaussian2;
@@ -742,79 +898,68 @@ namespace {
 		fscanf(resFilePtr, "%d%d", &wTileSize, &hTileSize);
 		fscanf(resFilePtr, "%*c");
 
+		cv::Mat drawedImage1 =img1.clone(),
+			    drawedImage2 =img2.clone();
+
 		for (int i=0; i<numberOfTile*numberOfTile; ++i) {
 			fscanf(resFilePtr, "%d%d%d%d", &wPoint1, &hPoint1, &wPoint2, &hPoint2);
 			fscanf(resFilePtr, "%d%d", &difference, &points);
 
-			cv::line(img1, cv::Point(wPoint1, hPoint1), cv::Point(wPoint1+wTileSize, hPoint1),
-						cv::Scalar(255, 255, 0), lineSize);
-			cv::line(img1, cv::Point(wPoint1, hPoint1), cv::Point(wPoint1, hPoint1+hTileSize),
-						cv::Scalar(255, 255, 0), lineSize);
-			cv::line(img1, cv::Point(wPoint1+wTileSize, hPoint1), cv::Point(wPoint1+wTileSize, hPoint1+hTileSize),
-						cv::Scalar(255, 255, 0), lineSize);
-			cv::line(img1, cv::Point(wPoint1, hPoint1+hTileSize), cv::Point(wPoint1+wTileSize, hPoint1+hTileSize),
-						cv::Scalar(255, 255, 0), lineSize);
-
-			cv::line(img2, cv::Point(wPoint2, hPoint2), cv::Point(wPoint2, hPoint2+hTileSize),
-						cv::Scalar(255,255,0), lineSize);
-			cv::line(img2, cv::Point(wPoint2, hPoint2), cv::Point(wPoint2+wTileSize, hPoint2),
-						cv::Scalar(255,255,0), lineSize);
-			cv::line(img2, cv::Point(wPoint2, hPoint2+hTileSize), cv::Point(wPoint2+wTileSize, hPoint2+hTileSize),
-						cv::Scalar(255,255,0), lineSize);
-			cv::line(img2, cv::Point(wPoint2+wTileSize, hPoint2), cv::Point(wPoint2+wTileSize, hPoint2+hTileSize),
-						cv::Scalar(255,255,0), lineSize);
-
 			sprintf(diffHist, "%d", difference);
 
 			if (difference>500) {
-				/*
-				cv::Rect tempTileRect(wPoint1, hPoint1, wTileSize, hTileSize);
-				cv::Mat tempTile =img1(tempTileRect);
-				cv::Mat lineMap =getHoughLines(tempTile);
-				lineMap.copyTo(img1(cv::Rect(wPoint1, hPoint1, wTileSize, hTileSize)));
-
-				tempTileRect =cv::Rect(wPoint2, hPoint2, wTileSize, hTileSize);
-				tempTile = img2(tempTileRect);
-				lineMap = getHoughLines(tempTile);
-				lineMap.copyTo(img2(cv::Rect(wPoint2, hPoint2, wTileSize, hTileSize)));
-				*/
-
+				
 				cv::Rect tempTileRect1(wPoint1, hPoint1, wTileSize, hTileSize),
 						 tempTileRect2(wPoint2, hPoint2, wTileSize, hTileSize);
 
 				cv::Mat image1Roi = img1(tempTileRect1),
 						image2Roi = img2(tempTileRect2);
 
-				std::vector<cv::Vec4i> imageLines1 =getHoughLines(image1Roi),
-									   imageLines2 =getHoughLines(image2Roi);
+				matchTheEdges(image1Roi, image2Roi);
 
-				matchTheEdges(image1Roi, image2Roi, imageLines1, imageLines2);
+				image1Roi.copyTo(drawedImage1(tempTileRect1));
+				image2Roi.copyTo(drawedImage2(tempTileRect2));
 
-				putText(img1, diffHist, cv::Point(wPoint1+wTileSize*0.1, hPoint1+hTileSize*0.5), cv::FONT_HERSHEY_COMPLEX_SMALL, lineSize+1,
+				putText(drawedImage1, diffHist, cv::Point(wPoint1+wTileSize*0.1, hPoint1+hTileSize*0.5), cv::FONT_HERSHEY_COMPLEX_SMALL, lineSize+1,
 						cv::Scalar(255, 255, 0), lineSize+1, CV_AA);
 
-				putText(img2, diffHist, cv::Point(wPoint2+wTileSize*0.1, hPoint2+hTileSize*0.5), cv::FONT_HERSHEY_COMPLEX_SMALL, lineSize+1,
+				putText(drawedImage2, diffHist, cv::Point(wPoint2+wTileSize*0.1, hPoint2+hTileSize*0.5), cv::FONT_HERSHEY_COMPLEX_SMALL, lineSize+1,
 						cv::Scalar(255, 255, 0), lineSize+1, CV_AA);
 				
 				
-
 			} else {
-				putText(img1, diffHist, cv::Point(wPoint1+wTileSize*0.1, hPoint1+hTileSize*0.5), cv::FONT_HERSHEY_COMPLEX_SMALL, lineSize+1,
+				putText(drawedImage1, diffHist, cv::Point(wPoint1+wTileSize*0.1, hPoint1+hTileSize*0.5), cv::FONT_HERSHEY_COMPLEX_SMALL, lineSize+1,
 						cv::Scalar(0, 0, 0), lineSize+1, CV_AA);
 
-				putText(img2, diffHist, cv::Point(wPoint2+wTileSize*0.1, hPoint2+hTileSize*0.5), cv::FONT_HERSHEY_COMPLEX_SMALL, lineSize+1,
+				putText(drawedImage2, diffHist, cv::Point(wPoint2+wTileSize*0.1, hPoint2+hTileSize*0.5), cv::FONT_HERSHEY_COMPLEX_SMALL, lineSize+1,
 						cv::Scalar(0, 0, 0), lineSize+1, CV_AA);
 			}
 
+			cv::line(drawedImage1, cv::Point(wPoint1, hPoint1), cv::Point(wPoint1+wTileSize, hPoint1),
+						cv::Scalar(255, 255, 0), lineSize);
+			cv::line(drawedImage1, cv::Point(wPoint1, hPoint1), cv::Point(wPoint1, hPoint1+hTileSize),
+						cv::Scalar(255, 255, 0), lineSize);
+			cv::line(drawedImage1, cv::Point(wPoint1+wTileSize, hPoint1), cv::Point(wPoint1+wTileSize, hPoint1+hTileSize),
+						cv::Scalar(255, 255, 0), lineSize);
+			cv::line(drawedImage1, cv::Point(wPoint1, hPoint1+hTileSize), cv::Point(wPoint1+wTileSize, hPoint1+hTileSize),
+						cv::Scalar(255, 255, 0), lineSize);
 
+			cv::line(drawedImage2, cv::Point(wPoint2, hPoint2), cv::Point(wPoint2, hPoint2+hTileSize),
+						cv::Scalar(255,255,0), lineSize);
+			cv::line(drawedImage2, cv::Point(wPoint2, hPoint2), cv::Point(wPoint2+wTileSize, hPoint2),
+						cv::Scalar(255,255,0), lineSize);
+			cv::line(drawedImage2, cv::Point(wPoint2, hPoint2+hTileSize), cv::Point(wPoint2+wTileSize, hPoint2+hTileSize),
+						cv::Scalar(255,255,0), lineSize);
+			cv::line(drawedImage2, cv::Point(wPoint2+wTileSize, hPoint2), cv::Point(wPoint2+wTileSize, hPoint2+hTileSize),
+						cv::Scalar(255,255,0), lineSize);
 		} // end of for i
 
 		fprintf(stderr, "average difference: %d\n", totalDifference/(numberOfTile*numberOfTile) );
 
 		outputs.edgeMap1 =edgeImage1;
 		outputs.edgeMap2 =edgeImage2;
-		outputs.difImage1 =img1;
-		outputs.difImage2 =img2;
+		outputs.difImage1 =drawedImage1;
+		outputs.difImage2 =drawedImage2;
 		outputs.histogram =xls;
 		fclose( resFilePtr );
 
