@@ -34,7 +34,7 @@
 #define MAX_BUF_SIZE 250
 
 // Edge searching and matching steps distance threshold
-#define DISTANCE_BETWEEN_2_POINT_THRESHOLD 50
+#define DISTANCE_BETWEEN_2_POINT_THRESHOLD 30
 
 #if defined(MIN)
 	#undef MIN
@@ -77,12 +77,12 @@ namespace {
 	int processImageTileByTile (const cv::Mat& image1, const cv::Mat& image2, int numberOfTile,
 								ExcelFormat::BasicExcel& xls, FILE* fPtr);
 	int getSumOfTheHistogram(const cv::Mat& hist);
-	std::vector<cv::Vec4i> getHoughLines(const cv::Mat& image);
+	std::vector<cv::Vec4i> getHoughLines(const cv::Mat& image, cv::Mat& edgeMap);
 	bool isParallelToEdge(const int wSize, const int hSize, const cv::Point& pt1, const cv::Point& pt2);
 	void matchTheEdges(cv::Mat& roi1, cv::Mat& roi2);
 	int getEuclidianDistanceBetween2Points(const cv::Point& p1, const cv::Point& p2);
-	void drawBorderObject(cv::Mat& image, const std::vector<cv::Vec4i>& lines);
-	void connectBorderLine(cv::Mat& image, const cv::Point& p, cv::Scalar color);
+	void drawBorderObject(cv::Mat& image, cv::Mat& edgeMap, const std::vector<cv::Vec4i>& lines);
+	void connectBorderLine(cv::Mat& edgeMap, cv::Mat& image, const cv::Point& p, cv::Scalar color);
 } // end of unnamed namespace
 
 GYTE_DIFF_FINDER::DiffFinderHOG::DiffFinderHOG() : DiffFinder() {
@@ -505,7 +505,7 @@ namespace {
 		return true;
 	}
 
-	std::vector<cv::Vec4i> getHoughLines(const cv::Mat& image) {
+	std::vector<cv::Vec4i> getHoughLines(const cv::Mat& image, cv::Mat& edgeMap) {
 		
 		std::vector<cv::Vec4i> lines;
 
@@ -526,6 +526,7 @@ namespace {
 		
 		cv::HoughLinesP(dest, lines, 1, CV_PI/360, 10, 20, 2);
 		
+		edgeMap = cdest.clone();
 		// bu döngüye þu an gerek kalmadý
 		/*
 		for( size_t i = 0; i < lines.size(); i++ ) {
@@ -537,119 +538,142 @@ namespace {
 				lines.erase(lines.begin() + i);
 			}
 		} // end of for loop
+		
 		*/
+
 		return lines;
 	}
-	void connectBorderLine(cv::Mat& image, const cv::Point& p, cv::Scalar color) {
+	void connectBorderLine(cv::Mat& edgeMap, cv::Mat& image, const cv::Point& p, cv::Scalar color) {
 		std::vector<cv::Point> points;
 		cv::Point curr, neigb;
 		
 		points.push_back(p);
+
+		cv::namedWindow("connectBorderLine", CV_WINDOW_NORMAL);
+		cv::imshow("connectBorderLine", edgeMap); cv::waitKey();
+
+		cv::line(image, p, p, color, 1);
+		cv::line(edgeMap, p, p, color, 1);
 
 		while(!points.empty()) {
 			fprintf(stderr, "connectBorder size %d\n", points.size());
 			curr = points.back();	
 			points.pop_back();
 
-			cv::line(image, curr, curr, color, 1);
+			cv::imshow("connectBorderLine", edgeMap); cv::waitKey();
 
 			neigb = cv::Point(curr.x+1, curr.y);
 
-			if (image.at<cv::Vec3b>(neigb.y, neigb.x)[0] > 245 &&
-				image.at<cv::Vec3b>(neigb.y, neigb.x)[1] > 245 &&
-				image.at<cv::Vec3b>(neigb.y, neigb.x)[2] > 245) {
+			if (edgeMap.at<cv::Vec3b>(neigb.y, neigb.x)[0] > 245 &&
+				edgeMap.at<cv::Vec3b>(neigb.y, neigb.x)[1] > 245 &&
+				edgeMap.at<cv::Vec3b>(neigb.y, neigb.x)[2] > 245) {
 				
-				cv::line(image, neigb, neigb, color, 1);					
+				cv::line(image, neigb, neigb, color, 1);
+				cv::line(edgeMap, neigb, neigb, color, 1);
 				points.push_back(neigb);
 			}
 			
 
 			neigb = cv::Point(curr.x+1, curr.y+1);
 
-			if (image.at<cv::Vec3b>(neigb.y, neigb.x)[0] > 245 &&
-				image.at<cv::Vec3b>(neigb.y, neigb.x)[1] > 245 &&
-				image.at<cv::Vec3b>(neigb.y, neigb.x)[2] > 245){
+			if (edgeMap.at<cv::Vec3b>(neigb.y, neigb.x)[0] > 245 &&
+				edgeMap.at<cv::Vec3b>(neigb.y, neigb.x)[1] > 245 &&
+				edgeMap.at<cv::Vec3b>(neigb.y, neigb.x)[2] > 245){
 				
-				cv::line(image, neigb, neigb, color, 1);					
+				cv::line(image, neigb, neigb, color, 1);
+				cv::line(edgeMap, neigb, neigb, color, 1);
 				points.push_back(neigb);
 			}
 
 			neigb = cv::Point(curr.x, curr.y+1);
 
-			if (image.at<cv::Vec3b>(neigb.y, neigb.x)[0] > 245 &&
-				image.at<cv::Vec3b>(neigb.y, neigb.x)[1] > 245 &&
-				image.at<cv::Vec3b>(neigb.y, neigb.x)[2] > 245){
+			if (edgeMap.at<cv::Vec3b>(neigb.y, neigb.x)[0] > 245 &&
+				edgeMap.at<cv::Vec3b>(neigb.y, neigb.x)[1] > 245 &&
+				edgeMap.at<cv::Vec3b>(neigb.y, neigb.x)[2] > 245){
 				
-				cv::line(image, neigb, neigb, color, 1);					
+				cv::line(image, neigb, neigb, color, 1);
+				cv::line(edgeMap, neigb, neigb, color, 1);
 				points.push_back(neigb);
 			}
 
 			neigb = cv::Point(curr.x-1, curr.y+1);
 
-			if (image.at<cv::Vec3b>(neigb.y, neigb.x)[0] > 245 &&
-				image.at<cv::Vec3b>(neigb.y, neigb.x)[1] > 245 &&
-				image.at<cv::Vec3b>(neigb.y, neigb.x)[2] > 245){
+			if (edgeMap.at<cv::Vec3b>(neigb.y, neigb.x)[0] > 245 &&
+				edgeMap.at<cv::Vec3b>(neigb.y, neigb.x)[1] > 245 &&
+				edgeMap.at<cv::Vec3b>(neigb.y, neigb.x)[2] > 245){
 				
-				cv::line(image, neigb, neigb, color, 1);					
+				cv::line(image, neigb, neigb, color, 1);
+				cv::line(edgeMap, neigb, neigb, color, 1);
 				points.push_back(neigb);
 			}
 
 			neigb = cv::Point(curr.x-1, curr.y);
 
-			if (image.at<cv::Vec3b>(neigb.y, neigb.x)[0] > 245 &&
-				image.at<cv::Vec3b>(neigb.y, neigb.x)[1] > 245 &&
-				image.at<cv::Vec3b>(neigb.y, neigb.x)[2] > 245){
+			if (edgeMap.at<cv::Vec3b>(neigb.y, neigb.x)[0] > 245 &&
+				edgeMap.at<cv::Vec3b>(neigb.y, neigb.x)[1] > 245 &&
+				edgeMap.at<cv::Vec3b>(neigb.y, neigb.x)[2] > 245){
 				
-				cv::line(image, neigb, neigb, color, 1);					
+				cv::line(image, neigb, neigb, color, 1);
+				cv::line(edgeMap, neigb, neigb, color, 1);
 				points.push_back(neigb);
 			}
 
 			neigb = cv::Point(curr.x-1, curr.y-1);
 
-			if (image.at<cv::Vec3b>(neigb.y, neigb.x)[0] > 245 &&
-				image.at<cv::Vec3b>(neigb.y, neigb.x)[1] > 245 &&
-				image.at<cv::Vec3b>(neigb.y, neigb.x)[2] > 245){
+			if (edgeMap.at<cv::Vec3b>(neigb.y, neigb.x)[0] > 245 &&
+				edgeMap.at<cv::Vec3b>(neigb.y, neigb.x)[1] > 245 &&
+				edgeMap.at<cv::Vec3b>(neigb.y, neigb.x)[2] > 245){
 				
-				cv::line(image, neigb, neigb, color, 1);					
+				cv::line(image, neigb, neigb, color, 1);
+				cv::line(edgeMap, neigb, neigb, color, 1);
 				points.push_back(neigb);
 			}
 
 			neigb = cv::Point(curr.x, curr.y-1);
 
-			if (image.at<cv::Vec3b>(neigb.y, neigb.x)[0] > 245 &&
-				image.at<cv::Vec3b>(neigb.y, neigb.x)[1] > 245 &&
-				image.at<cv::Vec3b>(neigb.y, neigb.x)[2] > 245){
+			if (edgeMap.at<cv::Vec3b>(neigb.y, neigb.x)[0] > 245 &&
+				edgeMap.at<cv::Vec3b>(neigb.y, neigb.x)[1] > 245 &&
+				edgeMap.at<cv::Vec3b>(neigb.y, neigb.x)[2] > 245){
 				
-				cv::line(image, neigb, neigb, color, 1);					
+				cv::line(image, neigb, neigb, color, 1);
+				cv::line(edgeMap, neigb, neigb, color, 1);
 				points.push_back(neigb);
 			}
 
 			neigb = cv::Point(curr.x+1, curr.y-1);
 
-			if (image.at<cv::Vec3b>(neigb.y, neigb.x)[0] > 245 &&
-				image.at<cv::Vec3b>(neigb.y, neigb.x)[1] > 245 &&
-				image.at<cv::Vec3b>(neigb.y, neigb.x)[2] > 245){
+			if (edgeMap.at<cv::Vec3b>(neigb.y, neigb.x)[0] > 245 &&
+				edgeMap.at<cv::Vec3b>(neigb.y, neigb.x)[1] > 245 &&
+				edgeMap.at<cv::Vec3b>(neigb.y, neigb.x)[2] > 245){
 				
-				cv::line(image, neigb, neigb, color, 1);					
+				cv::line(image, neigb, neigb, color, 1);
+				cv::line(edgeMap, neigb, neigb, color, 1);
 				points.push_back(neigb);
 			}
-		}
+
+			// cv::imshow("connectBorderLine", edgeMap); cv::waitKey();
+
+		} // end of while loop
+
+		cv::destroyWindow("connectBorderLine");
 
 	}
 
 
-	void drawBorderObject(cv::Mat& image, const std::vector<cv::Vec4i>& lines) {
+	void drawBorderObject(cv::Mat& image, cv::Mat& edgeMap, std::vector<cv::Vec4i>& lines) {
 		
+		cv::imshow("drawBorderObject", edgeMap); cv::waitKey();
+
 		for (int i=0; i<lines.size(); ++i) {
 			cv::Point p1( (lines[i])[0], (lines[i])[1]), // point 1
 					  p2( (lines[i])[2], (lines[i])[3]); // point 2
 
-			connectBorderLine(image, p1, BLUE);
-			connectBorderLine(image, p2, BLUE);
+			connectBorderLine(edgeMap, image, p1, BLUE);
+			connectBorderLine(edgeMap, image, p2, BLUE);
 		}
 		
-		cv::namedWindow("drawBorder", CV_WINDOW_NORMAL);
-		cv::imshow("drawBorder", image); cv::waitKey();
+		// cv::namedWindow("drawBorder", CV_WINDOW_NORMAL);
+		// cv::imshow("drawBorder", image); cv::waitKey();
 
 	}
 
@@ -670,17 +694,35 @@ namespace {
 			std::exit(-1);
 		}
 
-		std::vector<cv::Vec4i> lines1 =getHoughLines(roi1),
-							   lines2 =getHoughLines(roi2);
+		cv::Mat edgeMap1,
+				edgeMap2;
 
+		std::vector<cv::Vec4i> lines1 =getHoughLines(roi1, edgeMap1),
+							   lines2 =getHoughLines(roi2, edgeMap2);
+		
 		int distance =0;
 
-		/*
-		cv::namedWindow("tile1", CV_WINDOW_NORMAL);
-		cv::namedWindow("tile2", CV_WINDOW_NORMAL);
-		*/
+		for (int i=0; i<lines1.size(); ++i) {
+			cv::Point st1( (lines1[i])[0], (lines1[i])[1] );
+			cv::Point fn1( (lines1[i])[2], (lines1[i])[3] );
+			
+			cv::line(roi1, st1, fn1, BLUE, 2);
+			cv::line(edgeMap1, st1, fn1, BLUE, 2);
+		}
 
-		// fprintf(stderr, "	line1Size %d-line2Size %d\n", lines1.size(), lines2.size());
+		for (int j=0; j<lines2.size(); ++j) {
+			cv::Point st2( (lines2[j])[0], (lines2[j])[1] );
+			cv::Point fn2( (lines2[j])[2], (lines2[j])[3] );
+
+			cv::line(roi2, st2, fn2, BLUE, 2);
+			cv::line(edgeMap2, st2, fn2, BLUE, 2);
+		}
+
+		cv::imshow("roi1", roi1);
+		cv::imshow("roi2", roi2);
+		cv::imshow("edgeMap1", edgeMap1);
+		cv::imshow("edgeMap2", edgeMap2);
+		cv::waitKey();
 
 		for (int i=0; i<lines1.size(); ++i) {
 			for (int j=0; j<lines2.size(); ++j) {
@@ -694,19 +736,15 @@ namespace {
 				cv::Point fn2( (lines2[j])[2], (lines2[j])[3] );
 
 				distance = getEuclidianDistanceBetween2Points(st1, st2);
-				fprintf(stderr, "distance %d\n", distance);
-
-				cv::line(temp1, st1, fn1, GREEN, 3);
-				cv::line(temp2, st2, fn2, GREEN, 3);
-
-				// cv::imshow("tile1", temp1); cv::imshow("tile2", temp2); cv::waitKey();
-
+				
 				if (DISTANCE_BETWEEN_2_POINT_THRESHOLD > distance) {
 					distance = getEuclidianDistanceBetween2Points(fn1, fn2);
 
 					if (DISTANCE_BETWEEN_2_POINT_THRESHOLD > distance) {
 						cv::line(roi1, st1, fn1, RED, 2);
 						cv::line(roi2, st2, fn2, RED, 2);
+						cv::line(edgeMap1, st1, fn1, RED, 2);
+						cv::line(edgeMap2, st2, fn2, RED, 2);
 					}
 
 				} else {
@@ -718,6 +756,8 @@ namespace {
 						if (DISTANCE_BETWEEN_2_POINT_THRESHOLD > distance) {
 							cv::line(roi1, st1, fn1, RED, 2);
 							cv::line(roi2, st2, fn2, RED, 2);
+							cv::line(edgeMap1, st1, fn1, RED, 2);
+							cv::line(edgeMap2, st2, fn2, RED, 2);
 						}
 					}
 				}
@@ -726,13 +766,21 @@ namespace {
 				temp2.release();
 			}
 		}
+		
+		
+		cv::imshow("roi1", roi1);
+		cv::imshow("roi2", roi2);
+		cv::imshow("edgeMap1", edgeMap1);
+		cv::imshow("edgeMap2", edgeMap2);
+		cv::waitKey();
+		
 
-		drawBorderObject(roi1, lines1);
-		drawBorderObject(roi2, lines2);
+		// drawBorderObject(roi1, edgeMap1, lines1);
+		// drawBorderObject(roi2, edgeMap2, lines2);
 
 		// cv::imshow("tile1Res", roi1); cv::imshow("tile2Res", roi2); cv::waitKey();
 
-		return;
+  		return;
 	}
 
 	GYTE_DIFF_FINDER::difoutputs getDifference(const cv::Mat& const image1, const cv::Mat& const image2,
