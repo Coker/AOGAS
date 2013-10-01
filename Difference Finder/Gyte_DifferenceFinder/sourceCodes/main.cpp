@@ -24,6 +24,7 @@ namespace {
 	void testSmooth(void);
 	cv::Mat erade(const cv::Mat& src, const int eradeSize, const int eradeType);
 	cv::Mat dilate(const cv::Mat& src, const int dilationSize, const int dilationType);
+	cv::Mat scaleImage(const cv::Mat& image, const double scaleRatio);
 }
 
 int main(void)
@@ -63,10 +64,13 @@ int main(void)
 	cv::Mat pano =cv::imread(ImageMatchPath.data());
 	cv::Mat rgb =cv::imread(panoMatchPath.data());
 
+	pano =scaleImage(pano, 2.0);
+	rgb =scaleImage(rgb, 2.0);
+
 	GYTE_DIFF_FINDER::DiffFinderHOG finder;
 	finder.setRgbMapImage(pano);
 	finder.getDiff(GYTE_DIFF_FINDER::AffRect(), rgb, outputPath);
-	
+
 	scanf("%*d");
 
 	return 0;
@@ -74,6 +78,20 @@ int main(void)
 
 namespace {
 	
+	cv::Mat scaleImage(const cv::Mat& image, const double scaleRatio) {
+		
+		if (image.empty() && scaleRatio < 0.001) {
+			std::cerr << "Your parameter is not appropriate \n";
+			scanf("%*c");
+			std::exit(-1);
+		}
+
+		cv::Mat res(cv::Size(image.cols/scaleRatio, image.rows/scaleRatio), image.type());
+		cv::resize(image, res, cv::Size(image.cols/scaleRatio, image.rows/scaleRatio));
+		
+		return res.clone();
+	}
+
 	cv::Mat erade(const cv::Mat& src, const int eradeSize, const int eradeType) {
 		cv::Mat eroded;
 		cv::Mat config;

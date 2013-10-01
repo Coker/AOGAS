@@ -34,7 +34,7 @@
 #define MAX_BUF_SIZE 250
 
 // Edge searching and matching steps distance threshold
-#define DISTANCE_BETWEEN_2_POINT_THRESHOLD 20
+#define DISTANCE_BETWEEN_2_POINT_THRESHOLD 40
 
 #if defined(MIN)
 	#undef MIN
@@ -83,6 +83,8 @@ namespace {
 	int getEuclidianDistanceBetween2Points(const cv::Point& p1, const cv::Point& p2);
 	void drawBorderObject(cv::Mat& edgeMap1, cv::Mat& edgeMap2);
 	void connectBorderLine(cv::Mat& edgeMap1, cv::Mat& edgeMap2, const cv::Point& p, cv::Scalar color);
+	cv::Mat scaleImage(const cv::Mat& image, const double scaleRatio);
+	cv::Mat syncGrayToRgb(const cv::Mat );
 } // end of unnamed namespace
 
 GYTE_DIFF_FINDER::DiffFinderHOG::DiffFinderHOG() : DiffFinder() {
@@ -163,6 +165,20 @@ void GYTE_DIFF_FINDER::DiffFinderHOG::getDiff(GYTE_DIFF_FINDER::AffRect regist8e
 }
 
 namespace {
+
+	cv::Mat scaleImage(const cv::Mat& image, const double scaleRatio) {
+		
+		if (image.empty() && scaleRatio < 0.001) {
+			std::cerr << "Your parameter is not appropriate \n";
+			scanf("%*c");
+			std::exit(-1);
+		}
+
+		cv::Mat res(cv::Size(image.cols/scaleRatio, image.rows/scaleRatio), image.type());
+		cv::resize(image, res, cv::Size(image.cols/scaleRatio, image.rows/scaleRatio));
+		
+		return res.clone();
+	}
 
 	int getSumOfTheHistogram(const cv::Mat& hist) {
 		if (hist.empty()) {
@@ -524,7 +540,7 @@ namespace {
 				
 		cv::imwrite("CannyEdges.bmp", dest);
 		
-		cv::HoughLinesP(dest, lines, 1, CV_PI/360, 10, 20, 2);
+		cv::HoughLinesP(dest, lines, 1, CV_PI/360, 5, 20, 2);
 		
 		edgeMap = cdest.clone();
 		// bu döngüye þu an gerek kalmadý
@@ -543,12 +559,11 @@ namespace {
 
 		return lines;
 	}
+	
 	void connectBorderLine(cv::Mat& edgeMap1, cv::Mat& edgeMap2, const cv::Point& p, cv::Scalar color) {
 		std::vector<cv::Point> points;
 		
 		cv::Point curr, neigh;
-
-
 
 		(edgeMap1.at<cv::Vec3b>(p.y, p.x))[0] = (edgeMap2.at<cv::Vec3b>(p.y, p.x))[0] = color[0];
 		(edgeMap1.at<cv::Vec3b>(p.y, p.x))[1] = (edgeMap2.at<cv::Vec3b>(p.y, p.x))[1] = color[1];
@@ -560,47 +575,153 @@ namespace {
 			curr = points.back();
 			points.pop_back();
 			
-			neigh  = cv::Point(curr.x, curr.y+1);
-
-			/*
-			if (edgeMap1.at<cv::Vec3b>(j,i)[0]
-				edgeMap1.at<cv::Vec3b>(j,i)[1]
-				edgeMap1.at<cv::Vec3b>(j,i)[2])
-			*/
-#define PIXEL_CONDITIONS(x, y)  !(0 == edgeMap1.at<cv::Vec3b>((y),(x))[0] &&				\
-									255 == edgeMap1.at<cv::Vec3b>((y),(x))[1] &&			\
-									0 == edgeMap1.at<cv::Vec3b>((y),(x))[2]) &&				\
-								!(0 == edgeMap1.at<cv::Vec3b>((y),(x))[0] &&				\
-									0 == edgeMap1.at<cv::Vec3b>((y),(x))[1] &&				\
-									0 == edgeMap1.at<cv::Vec3b>((y),(x))[2])
+#define PIXEL_CONDITIONS(x, y)  !(color[0] == edgeMap1.at<cv::Vec3b>((y),(x))[0] &&					\
+								  color[1] == edgeMap1.at<cv::Vec3b>((y),(x))[1] &&					\
+								  color[2] == edgeMap1.at<cv::Vec3b>((y),(x))[2])	 &&				\
+								!(0 == edgeMap1.at<cv::Vec3b>((y),(x))[0] &&						\
+								  0 == edgeMap1.at<cv::Vec3b>((y),(x))[1] &&						\
+								  0 == edgeMap1.at<cv::Vec3b>((y),(x))[2])	&&						\
+								!(0 == edgeMap1.at<cv::Vec3b>((y),(x))[0] &&						\
+								  255 == edgeMap1.at<cv::Vec3b>((y),(x))[1] &&						\
+								  0 == edgeMap1.at<cv::Vec3b>((y),(x))[2])
 			
-			if (PIXEL_CONDITIONS(neigh.x, neigh.y)) {
-				;
+			if (curr.x < (edgeMap1.cols-1)) {
+				neigh  =cv::Point(curr.x+1, curr.y);
+
+				if (PIXEL_CONDITIONS(neigh.x, neigh.y)) {
+					(edgeMap1.at<cv::Vec3b>(neigh.y, neigh.x))[0] = (edgeMap2.at<cv::Vec3b>(neigh.y, neigh.x))[0] = color[0];
+					(edgeMap1.at<cv::Vec3b>(neigh.y, neigh.x))[1] = (edgeMap2.at<cv::Vec3b>(neigh.y, neigh.x))[1] = color[1];
+					(edgeMap1.at<cv::Vec3b>(neigh.y, neigh.x))[2] = (edgeMap2.at<cv::Vec3b>(neigh.y, neigh.x))[2] = color[2];
+			
+					points.push_back(neigh);
+				}
+			}
+			
+			if ((curr.x < edgeMap1.cols-1) && curr.y < (edgeMap1.rows-1)) {
+				neigh =cv::Point(curr.x+1, curr.y+1);
+				
+				if (PIXEL_CONDITIONS(neigh.x, neigh.y)) {
+					(edgeMap1.at<cv::Vec3b>(neigh.y, neigh.x))[0] = (edgeMap2.at<cv::Vec3b>(neigh.y, neigh.x))[0] = color[0];
+					(edgeMap1.at<cv::Vec3b>(neigh.y, neigh.x))[1] = (edgeMap2.at<cv::Vec3b>(neigh.y, neigh.x))[1] = color[1];
+					(edgeMap1.at<cv::Vec3b>(neigh.y, neigh.x))[2] = (edgeMap2.at<cv::Vec3b>(neigh.y, neigh.x))[2] = color[2];
+			
+					points.push_back(neigh);
+				}
+			}
+			
+			if (curr.y < (edgeMap1.rows-1)) {
+				neigh =cv::Point(curr.x, curr.y+1);
+
+				if (PIXEL_CONDITIONS(neigh.x, neigh.y)) {
+					(edgeMap1.at<cv::Vec3b>(neigh.y, neigh.x))[0] = (edgeMap2.at<cv::Vec3b>(neigh.y, neigh.x))[0] = color[0];
+					(edgeMap1.at<cv::Vec3b>(neigh.y, neigh.x))[1] = (edgeMap2.at<cv::Vec3b>(neigh.y, neigh.x))[1] = color[1];
+					(edgeMap1.at<cv::Vec3b>(neigh.y, neigh.x))[2] = (edgeMap2.at<cv::Vec3b>(neigh.y, neigh.x))[2] = color[2];
+			
+					points.push_back(neigh);
+				}
+			}
+			
+			if ((curr.y < (edgeMap1.rows-1)) && (curr.x > 1)) {
+				neigh =cv::Point(curr.x-1, curr.y+1);
+
+				if (PIXEL_CONDITIONS(neigh.x, neigh.y)) {
+					(edgeMap1.at<cv::Vec3b>(neigh.y, neigh.x))[0] = (edgeMap2.at<cv::Vec3b>(neigh.y, neigh.x))[0] = color[0];
+					(edgeMap1.at<cv::Vec3b>(neigh.y, neigh.x))[1] = (edgeMap2.at<cv::Vec3b>(neigh.y, neigh.x))[1] = color[1];
+					(edgeMap1.at<cv::Vec3b>(neigh.y, neigh.x))[2] = (edgeMap2.at<cv::Vec3b>(neigh.y, neigh.x))[2] = color[2];
+					
+					points.push_back(neigh);
+				}
+			}
+			
+			if (curr.x > 1) {
+				neigh =cv::Point(curr.x-1, curr.y);
+
+				if (PIXEL_CONDITIONS(neigh.x, neigh.y)) {
+					(edgeMap1.at<cv::Vec3b>(neigh.y, neigh.x))[0] = (edgeMap2.at<cv::Vec3b>(neigh.y, neigh.x))[0] = color[0];
+					(edgeMap1.at<cv::Vec3b>(neigh.y, neigh.x))[1] = (edgeMap2.at<cv::Vec3b>(neigh.y, neigh.x))[1] = color[1];
+					(edgeMap1.at<cv::Vec3b>(neigh.y, neigh.x))[2] = (edgeMap2.at<cv::Vec3b>(neigh.y, neigh.x))[2] = color[2];
+			
+					points.push_back(neigh);
+				}
 			}
 
+			if ((curr.x > 1) && (curr.y > 1)) {
+				neigh =cv::Point(curr.x-1, curr.y-1);
+
+				if (PIXEL_CONDITIONS(neigh.x, neigh.y)) {
+					(edgeMap1.at<cv::Vec3b>(neigh.y, neigh.x))[0] = (edgeMap2.at<cv::Vec3b>(neigh.y, neigh.x))[0] = color[0];
+					(edgeMap1.at<cv::Vec3b>(neigh.y, neigh.x))[1] = (edgeMap2.at<cv::Vec3b>(neigh.y, neigh.x))[1] = color[1];
+					(edgeMap1.at<cv::Vec3b>(neigh.y, neigh.x))[2] = (edgeMap2.at<cv::Vec3b>(neigh.y, neigh.x))[2] = color[2];
+			
+					points.push_back(neigh);
+				}
+			}
+
+			if (curr.y > 1) {
+				neigh =cv::Point(curr.x, curr.y-1);
+
+				if (PIXEL_CONDITIONS(neigh.x, neigh.y)) {
+					(edgeMap1.at<cv::Vec3b>(neigh.y, neigh.x))[0] = (edgeMap2.at<cv::Vec3b>(neigh.y, neigh.x))[0] = color[0];
+					(edgeMap1.at<cv::Vec3b>(neigh.y, neigh.x))[1] = (edgeMap2.at<cv::Vec3b>(neigh.y, neigh.x))[1] = color[1];
+					(edgeMap1.at<cv::Vec3b>(neigh.y, neigh.x))[2] = (edgeMap2.at<cv::Vec3b>(neigh.y, neigh.x))[2] = color[2];
+			
+					points.push_back(neigh);
+				}
+			}
+
+			if ((curr.x < (edgeMap1.cols-1)) && (curr.y > 1)) {
+				neigh =cv::Point(curr.x+1, curr.y-1);
+
+				if (PIXEL_CONDITIONS(neigh.x, neigh.y)) {
+					(edgeMap1.at<cv::Vec3b>(neigh.y, neigh.x))[0] = (edgeMap2.at<cv::Vec3b>(neigh.y, neigh.x))[0] = color[0];
+					(edgeMap1.at<cv::Vec3b>(neigh.y, neigh.x))[1] = (edgeMap2.at<cv::Vec3b>(neigh.y, neigh.x))[1] = color[1];
+					(edgeMap1.at<cv::Vec3b>(neigh.y, neigh.x))[2] = (edgeMap2.at<cv::Vec3b>(neigh.y, neigh.x))[2] = color[2];
+			
+					points.push_back(neigh);
+				}
+			}
 
 #undef PIXEL_CONDITIONS	 
 
-		}
+		} // end of while loop
 
 
-		return;	
+		return;
 	}
 
 
 	void drawBorderObject(cv::Mat& edgeMap1, cv::Mat& edgeMap2) {
 		
-		cv::Vec3b bgrPixel;
+		cv::Vec3b bgrPixel1, bgrPixel2;
 
 		for (int i=0; i<edgeMap1.cols; ++i) {
 			for (int j=0; j<edgeMap1.rows; ++j) {
-				bgrPixel = edgeMap1.at<cv::Vec3b>(j,i);
+				bgrPixel1 =edgeMap1.at<cv::Vec3b>(j,i);
+				bgrPixel2 =edgeMap2.at<cv::Vec3b>(j,i);
 
-				if (0 == bgrPixel[0] && 0 == bgrPixel[1] && 255 == bgrPixel[2] )
+				if (0 == bgrPixel1[0] && 0 == bgrPixel1[1] && 255 == bgrPixel1[2] )
 					connectBorderLine(edgeMap1, edgeMap2, cv::Point(i,j), GREEN);
-				
+
+				if (0 == bgrPixel2[0] && 0 == bgrPixel2[1] && 255 == bgrPixel2[2] )
+					connectBorderLine(edgeMap2, edgeMap1, cv::Point(i,j), GREEN);
 			}
 		}
+
+		// connectBorderLine(cv::Mat& edgeMap1, cv::Mat& edgeMap2, const cv::Point& p, cv::Scalar color)
+		
+		for (int i=0; i<edgeMap1.cols; ++i) {
+			for (int j=0; j<edgeMap1.rows; ++j) {
+				bgrPixel1 =edgeMap1.at<cv::Vec3b>(j,i);
+				bgrPixel2 =edgeMap2.at<cv::Vec3b>(j,i);
+
+				if (255 == bgrPixel1[0] && 0 == bgrPixel1[1] && 0 == bgrPixel1[2] )
+					connectBorderLine(edgeMap1, edgeMap2, cv::Point(i,j), RED);
+
+				if (255 == bgrPixel2[0] && 0 == bgrPixel2[1] && 0 == bgrPixel2[2] )
+					connectBorderLine(edgeMap2, edgeMap1, cv::Point(i,j), RED);
+			}
+		}
+
 	}
 
 	int getEuclidianDistanceBetween2Points(const cv::Point& p1, const cv::Point& p2) {
@@ -684,7 +805,7 @@ namespace {
 
 	GYTE_DIFF_FINDER::difoutputs getDifference(const cv::Mat& const image1, const cv::Mat& const image2,
 		const int numberOfTile, int differecenceAlgo) {
-	
+		
 		GYTE_DIFF_FINDER::difoutputs outputs;
 		
 		outputs.difImage1 =cv::Mat();
@@ -726,6 +847,9 @@ namespace {
 		cv::Mat img1 =image1.clone(),
 				img2 =image2.clone();
 		
+		// img1 =scaleImage(img1, 2);
+		// img2 =scaleImage(img2, 2);
+
 		cv::Mat edgeImage1,
 				edgeImage2;
 
@@ -880,19 +1004,19 @@ namespace {
 				edgeMapRoi1.copyTo(drawedEdgeMap1(tempTileRect1));
 				edgeMapRoi2.copyTo(drawedEdgeMap2(tempTileRect2));
 
-				putText(drawedImage1, diffHist, cv::Point(wPoint1+wTileSize*0.1, hPoint1+hTileSize*0.5), cv::FONT_HERSHEY_COMPLEX_SMALL, lineSize+1,
-						cv::Scalar(255, 255, 0), lineSize+1, CV_AA);
+				putText(drawedImage1, diffHist, cv::Point(wPoint1+wTileSize*0.1, hPoint1+hTileSize*0.5),
+					cv::FONT_HERSHEY_COMPLEX_SMALL, lineSize+1,	cv::Scalar(255, 255, 0), lineSize+1, CV_AA);
 
-				putText(drawedImage2, diffHist, cv::Point(wPoint2+wTileSize*0.1, hPoint2+hTileSize*0.5), cv::FONT_HERSHEY_COMPLEX_SMALL, lineSize+1,
-						cv::Scalar(255, 255, 0), lineSize+1, CV_AA);
+				putText(drawedImage2, diffHist, cv::Point(wPoint2+wTileSize*0.1, hPoint2+hTileSize*0.5),
+					cv::FONT_HERSHEY_COMPLEX_SMALL, lineSize+1, cv::Scalar(255, 255, 0), lineSize+1, CV_AA);
 				
 				
 			} else {
-				putText(drawedImage1, diffHist, cv::Point(wPoint1+wTileSize*0.1, hPoint1+hTileSize*0.5), cv::FONT_HERSHEY_COMPLEX_SMALL, lineSize+1,
-						cv::Scalar(0, 0, 0), lineSize+1, CV_AA);
+				putText(drawedImage1, diffHist, cv::Point(wPoint1+wTileSize*0.1, hPoint1+hTileSize*0.5),
+					cv::FONT_HERSHEY_COMPLEX_SMALL, lineSize+1, cv::Scalar(0, 0, 0), lineSize+1, CV_AA);
 
-				putText(drawedImage2, diffHist, cv::Point(wPoint2+wTileSize*0.1, hPoint2+hTileSize*0.5), cv::FONT_HERSHEY_COMPLEX_SMALL, lineSize+1,
-						cv::Scalar(0, 0, 0), lineSize+1, CV_AA);
+				putText(drawedImage2, diffHist, cv::Point(wPoint2+wTileSize*0.1, hPoint2+hTileSize*0.5),
+					cv::FONT_HERSHEY_COMPLEX_SMALL, lineSize+1, cv::Scalar(0, 0, 0), lineSize+1, CV_AA);
 			}
 
 			cv::line(drawedImage1, cv::Point(wPoint1, hPoint1), cv::Point(wPoint1+wTileSize, hPoint1),
@@ -918,10 +1042,12 @@ namespace {
 
 		fprintf(stderr, "average difference: %d\n", totalDifference/(numberOfTile*numberOfTile) );
 		
+		syncGrayToRgb(drawedEdgeMap1, img1);
+
 		outputs.edgeMap1 =drawedEdgeMap1;
 		outputs.edgeMap2 =drawedEdgeMap2;
-		outputs.difImage1 =drawedImage1;
-		outputs.difImage2 =drawedImage2;
+		outputs.difImage1 =image1.clone();
+		outputs.difImage2 =image2.clone();
 		outputs.histogram =xls;
 		fclose( resFilePtr );
 
