@@ -84,7 +84,8 @@ namespace {
 	void drawBorderObject(cv::Mat& edgeMap1, cv::Mat& edgeMap2);
 	void connectBorderLine(cv::Mat& edgeMap1, cv::Mat& edgeMap2, const cv::Point& p, cv::Scalar color);
 	cv::Mat scaleImage(const cv::Mat& image, const double scaleRatio);
-	cv::Mat syncGrayToRgb(const cv::Mat );
+	void syncGrayToRgb(const cv::Mat& edgeImage, cv::Mat& rgbImage, const cv::Scalar& color);
+	void printVector2Excel(const std::vector<int>& differencesValue);
 } // end of unnamed namespace
 
 GYTE_DIFF_FINDER::DiffFinderHOG::DiffFinderHOG() : DiffFinder() {
@@ -101,7 +102,9 @@ void GYTE_DIFF_FINDER::DiffFinderHOG::getDiff(GYTE_DIFF_FINDER::AffRect register
 					const cv::Mat& rgbImage, const char* const outputFolder) const {
 	
 	int tileNumber =5;
-	
+	cv::Mat rgbImageScaled, rgbMapPanoScaled;
+
+
 	GYTE_DIFF_FINDER::difoutputs res;
 
 	time_t before, after;
@@ -115,7 +118,10 @@ void GYTE_DIFF_FINDER::DiffFinderHOG::getDiff(GYTE_DIFF_FINDER::AffRect register
 	newyear.tm_hour = 0; newyear.tm_min = 0; newyear.tm_sec = 0;
 	newyear.tm_mon = 0;  newyear.tm_mday = 1;
 
-	res = getDifference(rgbMapPano, rgbImage, tileNumber, HOG);
+	rgbImageScaled = scaleImage(rgbImage, 2.0);
+	rgbMapPanoScaled = scaleImage(rgbMapPano, 2.0);
+
+	res = getDifference(rgbMapPanoScaled, rgbImageScaled, tileNumber, HOG);
 
 	time(&after);
 	seconds = difftime(before, after);
@@ -166,10 +172,55 @@ void GYTE_DIFF_FINDER::DiffFinderHOG::getDiff(GYTE_DIFF_FINDER::AffRect regist8e
 
 namespace {
 
+	void printVector2Excel(const std::vector<int>& differencesValue) {
+		
+		ExcelFormat::BasicExcel xls;
+		ExcelFormat::BasicExcelWorksheet* sheet;
+		ExcelFormat::XLSFormatManager fmt_mgr(xls);
+
+		ExcelFormat::ExcelFont font_bold;
+		font_bold._weight = FW_BOLD; // 700
+
+		ExcelFormat::CellFormat fmt_bold(fmt_mgr);
+		fmt_bold.set_font(font_bold);
+
+		xls.New(1);
+
+		sheet = xls.GetWorksheet( 0 );
+		sheet->Rename( "difference" );
+		
+		(sheet->Cell(0,0))->SetFormat( fmt_bold );
+		(sheet->Cell(0,1))->SetFormat( fmt_bold );
+
+		for (int i=0; i<differencesValue.size(); ++i)
+			(sheet->Cell(i,0))->Set(differencesValue[i]);
+
+		xls.SaveAs("differences.xls");
+		return;
+	}
+
+	void syncGrayToRgb(const cv::Mat& edgeImage, cv::Mat& rgbImage, const cv::Scalar& color) {
+		 
+		cv::Vec3b pixelColor;
+
+		for (int i=0; i<edgeImage.cols; ++i) {
+			for (int j=0; j<edgeImage.rows; ++j) {
+				pixelColor = edgeImage.at<cv::Vec3b>(j, i);
+
+				if ( pixelColor[0] == color[0] &&
+					 pixelColor[1] == color[1] &&
+					 pixelColor[2] == color[2] ) {
+						 cv::line(rgbImage, cv::Point(i,j), cv::Point(i,j), color, 3);
+				}
+			}
+		}
+	
+	}
+	
 	cv::Mat scaleImage(const cv::Mat& image, const double scaleRatio) {
 		
 		if (image.empty() && scaleRatio < 0.001) {
-			std::cerr << "Your parameter is not appropriate \n";
+			std::cerr << "Your parameter is empty or not appropriate \n";
 			scanf("%*c");
 			std::exit(-1);
 		}
@@ -797,8 +848,9 @@ namespace {
 						}
 					}
 				}
-			}
-		}
+
+			} // end of inner for loop
+		} // end of for loop
 		
 		return;
 	}
@@ -830,11 +882,6 @@ namespace {
 		cv::GaussianBlur(image1, gaussian1, cv::Size(5, 5), 0,0);
 		cv::GaussianBlur(image2, gaussian2, cv::Size(5, 5), 0,0);
 
-#ifdef DEBUG
-		cv::namedWindow("image1", CV_WINDOW_NORMAL);
-		cv::namedWindow("image2", CV_WINDOW_NORMAL);
-#endif
-
 		cv::Mat hist1,
 				hist2;
 		
@@ -847,17 +894,9 @@ namespace {
 		cv::Mat img1 =image1.clone(),
 				img2 =image2.clone();
 		
-		// img1 =scaleImage(img1, 2);
-		// img2 =scaleImage(img2, 2);
-
 		cv::Mat edgeImage1,
 				edgeImage2;
 
-#if defined (DEBUG)
-		cv::imwrite("edgeImage1.jpg", edgeImage1);
-		cv::imwrite("egdeImage2.jpg", edgeImage2);
-		return outputs;
-#endif		
 		// Excel file config.
 		ExcelFormat::BasicExcel xls;
 		ExcelFormat::BasicExcelWorksheet* sheet;
@@ -886,12 +925,6 @@ namespace {
 			return outputs;
 		}
 
-#if defined (DEBUG)
-		cv::imshow("image1", img1);
-		cv::imshow("image2", img2);
-		cv::waitKey(0);
-#endif
-		
 		char readedLine[MAX_BUF_SIZE];
 
 		int wPoint1 =0,
@@ -981,12 +1014,15 @@ namespace {
 		cv::Mat edgeMapRoi1,
 				edgeMapRoi2;
 
+		std::vector<int> differences;
 
 		for (int i=0; i<numberOfTile*numberOfTile; ++i) {
 			fscanf(resFilePtr, "%d%d%d%d", &wPoint1, &hPoint1, &wPoint2, &hPoint2);
 			fscanf(resFilePtr, "%d%d", &difference, &points);
 
 			sprintf(diffHist, "%d", difference);
+
+			differences.push_back(difference);
 
 			if (difference>500) {
 				
@@ -1036,27 +1072,27 @@ namespace {
 						cv::Scalar(255,255,0), lineSize);
 			cv::line(drawedImage2, cv::Point(wPoint2+wTileSize, hPoint2), cv::Point(wPoint2+wTileSize, hPoint2+hTileSize),
 						cv::Scalar(255,255,0), lineSize);
-		} // end of for i
+		} // end of for (i...) loop
+
+		printVector2Excel(differences);
 
 		drawBorderObject(drawedEdgeMap1, drawedEdgeMap2);
 
 		fprintf(stderr, "average difference: %d\n", totalDifference/(numberOfTile*numberOfTile) );
 		
-		syncGrayToRgb(drawedEdgeMap1, img1);
+		cv::Mat releaseRes1 = image1.clone(),
+				releaseRes2 = image2.clone();
+
+		syncGrayToRgb(drawedEdgeMap1, releaseRes1, RED);
+		syncGrayToRgb(drawedEdgeMap2, releaseRes2, RED);
 
 		outputs.edgeMap1 =drawedEdgeMap1;
 		outputs.edgeMap2 =drawedEdgeMap2;
-		outputs.difImage1 =image1.clone();
-		outputs.difImage2 =image2.clone();
+		outputs.difImage1 =releaseRes1;
+		outputs.difImage2 =releaseRes2;
 		outputs.histogram =xls;
 		fclose( resFilePtr );
 
-#if defined( DEBUG )
-		xls.SaveAs("histograms.xls");
-		cv::imshow("image1", img1), cv::imshow("image2", img2); cv::waitKey(0);
-		cv::imwrite("diff1.bmp", img1);
-		cv::imwrite("diff2.bmp", img2);
-#endif
 		return outputs;
 	}
 

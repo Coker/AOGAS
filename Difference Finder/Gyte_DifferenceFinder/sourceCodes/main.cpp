@@ -64,8 +64,8 @@ int main(void)
 	cv::Mat pano =cv::imread(ImageMatchPath.data());
 	cv::Mat rgb =cv::imread(panoMatchPath.data());
 
-	pano =scaleImage(pano, 2.0);
-	rgb =scaleImage(rgb, 2.0);
+	// pano =scaleImage(pano, 2.0);
+	// rgb =scaleImage(rgb, 2.0);
 
 	GYTE_DIFF_FINDER::DiffFinderHOG finder;
 	finder.setRgbMapImage(pano);
