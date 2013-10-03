@@ -34,7 +34,7 @@
 #define MAX_BUF_SIZE 250
 
 // Edge searching and matching steps distance threshold
-#define DISTANCE_BETWEEN_2_POINT_THRESHOLD 40
+#define DISTANCE_BETWEEN_2_POINT_THRESHOLD 30
 
 #if defined(MIN)
 	#undef MIN
@@ -73,7 +73,6 @@ namespace {
 	cv::Mat dilate(const cv::Mat& src, const int dilationSize, const int dilationType);
 	cv::Mat erade(const cv::Mat& src, const int eradeSize, const int eradeType);
 	void printHist2Screen(const cv::Mat& histogram);
-	// void findEdgeDetectorOptimumParameter(const cv::Mat& image1, const cv::Mat& image2, double& ratio_1, double& ratio_2, int& threshold_1, int& threshold_2);
 	int processImageTileByTile (const cv::Mat& image1, const cv::Mat& image2, int numberOfTile,
 								ExcelFormat::BasicExcel& xls, FILE* fPtr);
 	int getSumOfTheHistogram(const cv::Mat& hist);
@@ -86,6 +85,9 @@ namespace {
 	cv::Mat scaleImage(const cv::Mat& image, const double scaleRatio);
 	void syncGrayToRgb(const cv::Mat& edgeImage, cv::Mat& rgbImage, const cv::Scalar& color);
 	void printVector2Excel(const std::vector<int>& differencesValue);
+	void verifyTheDifferentEdge(const cv::Mat& edgeMap1, const cv::Mat& edgeMap2,
+								const cv::Mat& rgbImage1, const cv::Mat& rgbImage2);
+	void searchEdge(const cv::Mat& rgbRoi1, const cv::Mat& rgbRoi2, const cv::Point& p);
 } // end of unnamed namespace
 
 GYTE_DIFF_FINDER::DiffFinderHOG::DiffFinderHOG() : DiffFinder() {
@@ -171,6 +173,56 @@ void GYTE_DIFF_FINDER::DiffFinderHOG::getDiff(GYTE_DIFF_FINDER::AffRect regist8e
 }
 
 namespace {
+	
+	void searchEdge(const cv::Mat& rgbRoi1, const cv::Mat& rgbRoi2, const cv::Point& p) {
+		
+		if (rgbRoi1.empty() || rgbRoi2.empty()) {
+			std::cerr << "ERROR searchEdge function, parameter is NOT SET\n";
+			scanf("%*c");
+			exit(-1);
+		}
+
+		cv::Mat edge1 = getEdgeImage(rgbRoi1, 3, 900),
+				edge2 = getEdgeImage(rgbRoi2, 3, 900);
+
+		// cv::imshow("edge1", edge1); cv::imshow("edge2", edge2); cv::waitKey();
+
+	} // end of searchEdge function
+	
+	void verifyTheDifferentEdge(const cv::Mat& edgeMap1, const cv::Mat& edgeMap2,
+								const cv::Mat& rgbImage1, const cv::Mat& rgbImage2) {
+		
+		if (edgeMap1.empty() || edgeMap2.empty() || rgbImage1.empty() || rgbImage2.empty()) {
+			std::cerr << "ERROR verifyTheDifferentEdge function: Parameter are empty\n";
+			scanf("%*c");
+			std::exit(-1);
+		}
+
+		cv::Vec3b pixelRgbVal;
+		cv::Mat res = edgeMap1.clone();
+		
+		cv::Mat rgbRoi1,
+				rgbRoi2;
+
+		for (int i=0; i<edgeMap1.cols; ++i) {
+			for (int j=0; j<edgeMap1.rows; ++j) {
+				pixelRgbVal = edgeMap1.at<cv::Vec3b>(j,i);
+
+				if ( 0 == pixelRgbVal[0] &&
+					 0 == pixelRgbVal[1] &&
+					 255 == pixelRgbVal[2] ) {
+						 cv::Rect boundry;
+						 cv::floodFill(res, cv::Point(i,j), BLUE, &boundry, cv::Scalar(0,0,254), cv::Scalar(0,0,255));
+
+						 // searchEdge(rgbRoi1, rgbRoi2, cv::Point(i,j));
+				}
+			}
+		}
+		
+		cv::imshow("verifyTheDifferentEdge", res); cv::waitKey();
+
+		return;
+	} // end of verifyTheDifferentEdge function
 
 	void printVector2Excel(const std::vector<int>& differencesValue) {
 		
@@ -197,7 +249,7 @@ namespace {
 
 		xls.SaveAs("differences.xls");
 		return;
-	}
+	} // end of the printVector2Excel function
 
 	void syncGrayToRgb(const cv::Mat& edgeImage, cv::Mat& rgbImage, const cv::Scalar& color) {
 		 
@@ -215,7 +267,7 @@ namespace {
 			}
 		}
 	
-	}
+	} // end of syncGrayToRgb function
 	
 	cv::Mat scaleImage(const cv::Mat& image, const double scaleRatio) {
 		
@@ -229,7 +281,7 @@ namespace {
 		cv::resize(image, res, cv::Size(image.cols/scaleRatio, image.rows/scaleRatio));
 		
 		return res.clone();
-	}
+	} // end of scaleImage function
 
 	int getSumOfTheHistogram(const cv::Mat& hist) {
 		if (hist.empty()) {
@@ -250,9 +302,8 @@ namespace {
 			sum += std::abs(hist.at<int>(0,i));
 
 		return sum;
-	}
+	} // end of getSumOfTheHistogram function
 
-	// functions definitions
 	void printHist2Screen(const cv::Mat& histogram) {
 
 		for (int i=0; i<histogram.cols; ++i) {
@@ -264,9 +315,8 @@ namespace {
 			
 	
 		fprintf(stdout, "\n****** end of the Histogram ********\n");
-	}
+	} // end of printHist2Screen function
 
-	// functions definitions
 	cv::Mat getSpecificRegionOfTheImage(cv::Mat image, cv::Rect region) {
 		cv::Mat specificReg = image(region);
 		cv::imwrite("specificReg.bmp", specificReg);
@@ -275,9 +325,16 @@ namespace {
 		specificReg = cv::imread("specificReg.bmp");
 		cv::cvtColor(specificReg, specificReg, CV_RGB2GRAY);
 		return specificReg;
-	}
+	} // end of getSpecificRegionOfTheImage function 
 
 	cv::Mat getEdgeImage(const cv::Mat& image, double ratio, double lowThreshold) {
+		
+		if (image.empty()) {
+			std::cerr << "ERROR getEdgeImage function, please Set The Image\n";
+			scanf("%*c");
+			exit(-1);
+		}
+		
 		cv::Mat src = image.clone();
 		cv::Mat src_gray;
 		cv::Mat dst, detected_edges;
@@ -308,7 +365,7 @@ namespace {
 		// imshow( window_name, dst );
 
 		return dst.clone();
-	}
+	} // end of getEdgeImage function
 
 	cv::Mat smoothHist(const cv::Mat& hist, int width, double height) {
 		cv::Mat smoothed = hist.clone();
@@ -320,7 +377,7 @@ namespace {
 		}
 		
 		return smoothed;
-	}
+	} // end of smoothHist function
 
 	cv::Mat dilate(const cv::Mat& src, const int dilationSize, const int dilationType) {
 		cv::Mat dilated;
@@ -330,7 +387,7 @@ namespace {
 									       cv::Point(dilationSize, dilationSize));
 		dilate(src, dilated, config);
 		return dilated;
-	}
+	} // end of dilate function
 
 	cv::Mat erade(const cv::Mat& src, const int eradeSize, const int eradeType) {
 		cv::Mat eroded;
@@ -341,7 +398,7 @@ namespace {
 		cv::erode(src, eroded, config);
 
 		return eroded;
-	}
+	} // end of erade function
 
 	int processImageTileByTile (const cv::Mat& image1, const cv::Mat& image2, int numberOfTile,
 						ExcelFormat::BasicExcel& xls, FILE* fPtr) {
@@ -570,7 +627,7 @@ namespace {
 		fprintf(stderr, "    true\n");
 
 		return true;
-	}
+	} // end of isParallelToEdge functions
 
 	std::vector<cv::Vec4i> getHoughLines(const cv::Mat& image, cv::Mat& edgeMap) {
 		
@@ -609,7 +666,7 @@ namespace {
 		*/
 
 		return lines;
-	}
+	} // end of getHoughLines functions
 	
 	void connectBorderLine(cv::Mat& edgeMap1, cv::Mat& edgeMap2, const cv::Point& p, cv::Scalar color) {
 		std::vector<cv::Point> points;
@@ -738,7 +795,7 @@ namespace {
 
 
 		return;
-	}
+	} // end of connectBorderLine functions
 
 
 	void drawBorderObject(cv::Mat& edgeMap1, cv::Mat& edgeMap2) {
@@ -773,7 +830,7 @@ namespace {
 			}
 		}
 
-	}
+	} // end of drawBorderObject function
 
 	int getEuclidianDistanceBetween2Points(const cv::Point& p1, const cv::Point& p2) {
 		int distance =0;
@@ -782,7 +839,7 @@ namespace {
 		distance = std::sqrt(distance);
 
 		return distance;
-	}
+	} // end of getEuclidianDistanceBetween2Points function
 
 	void matchTheEdges(cv::Mat& roi1, cv::Mat& roi2, cv::Mat& edgeMap1, cv::Mat& edgeMap2) {
 		
@@ -790,7 +847,7 @@ namespace {
 			std::cerr << "ERROR matchTheEdges: Parameters are empty !\n";
 			scanf("%*c");
 			std::exit(-1);
-		}
+		} // end of parameter cheching
 
 		std::vector<cv::Vec4i> lines1 =getHoughLines(roi1, edgeMap1),
 							   lines2 =getHoughLines(roi2, edgeMap2);
@@ -853,7 +910,7 @@ namespace {
 		} // end of for loop
 		
 		return;
-	}
+	} // end of matchTheEdges function
 
 	GYTE_DIFF_FINDER::difoutputs getDifference(const cv::Mat& const image1, const cv::Mat& const image2,
 		const int numberOfTile, int differecenceAlgo) {
@@ -1002,6 +1059,8 @@ namespace {
 		cv::imwrite("edgeMap1.bmp", edgeImage1);
 		cv::imwrite("edgeMap2.bmp", edgeImage2);
 
+		
+
 		fclose( resFilePtr );
 		resFilePtr = fopen("tileRes.txt", "rt");
 
@@ -1083,6 +1142,8 @@ namespace {
 		cv::Mat releaseRes1 = image1.clone(),
 				releaseRes2 = image2.clone();
 
+		verifyTheDifferentEdge(drawedEdgeMap1, drawedEdgeMap2, image1, image2);
+
 		syncGrayToRgb(drawedEdgeMap1, releaseRes1, RED);
 		syncGrayToRgb(drawedEdgeMap2, releaseRes2, RED);
 
@@ -1094,7 +1155,7 @@ namespace {
 		fclose( resFilePtr );
 
 		return outputs;
-	}
+	} // end of getDifference function
 
 	void printHistogramExcel(const cv::Mat& const hist1, const cv::Mat& const hist2,
 							 ExcelFormat::BasicExcelWorksheet* sheet) {
@@ -1143,7 +1204,7 @@ namespace {
 		diff = std::sqrt((double)diff);
 
 		return (int) diff;
-	}
+	} // end of calcDiffHistogram function
 
 	void getHOGFeatures1(const cv::Mat& const InputImage, cv::Mat& Histogram) {
 		cv::Mat gradH, gradV, imageO, imageM;
@@ -1196,6 +1257,6 @@ namespace {
 
 		// imshow("Orient Image", imageO); imshow("Magnit Image", imageM); cv::waitKey(0);
 		Histogram = smoothHist(Histogram, 0, 0);
-	} // end-getHOGFeatures1
+	} // end of getHOGFeatures1 function
 
 } // end of unnamed namespace
