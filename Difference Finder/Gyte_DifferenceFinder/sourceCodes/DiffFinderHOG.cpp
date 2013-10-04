@@ -36,6 +36,9 @@
 // Edge searching and matching steps distance threshold
 #define DISTANCE_BETWEEN_2_POINT_THRESHOLD 30
 
+// boundry increase size % 10
+#define BOUNDRY_EXPAND_SIZE 0.10
+
 #if defined(MIN)
 	#undef MIN
 	#define MIN(x, y) (y) + (((x) - (y)) & (((x) - (y)) >> (sizeof(int) * CHAR_BIT - 1)))
@@ -185,6 +188,7 @@ namespace {
 		cv::Mat edge1 = getEdgeImage(rgbRoi1, 3, 900),
 				edge2 = getEdgeImage(rgbRoi2, 3, 900);
 
+		cv::imshow("rgbRoi1", rgbRoi1); cv::imshow("rgbRoi2", rgbRoi2); cv::waitKey();
 		// cv::imshow("edge1", edge1); cv::imshow("edge2", edge2); cv::waitKey();
 
 	} // end of searchEdge function
@@ -198,6 +202,8 @@ namespace {
 			std::exit(-1);
 		}
 
+		cv::imshow("edgeMap1", edgeMap1); cv::imshow("edgeMap2", edgeMap2); cv::waitKey();
+
 		cv::Vec3b pixelRgbVal;
 		cv::Mat res = edgeMap1.clone();
 		
@@ -206,16 +212,41 @@ namespace {
 
 		for (int i=0; i<edgeMap1.cols; ++i) {
 			for (int j=0; j<edgeMap1.rows; ++j) {
-				pixelRgbVal = edgeMap1.at<cv::Vec3b>(j,i);
+				pixelRgbVal = res.at<cv::Vec3b>(j,i);
 
 				if ( 0 == pixelRgbVal[0] &&
 					 0 == pixelRgbVal[1] &&
 					 255 == pixelRgbVal[2] ) {
+						 fprintf(stderr, "%d-%d\n", i, j);
 						 cv::Rect boundry;
 						 cv::floodFill(res, cv::Point(i,j), BLUE, &boundry, cv::Scalar(0,0,254), cv::Scalar(0,0,255));
 
-						 // searchEdge(rgbRoi1, rgbRoi2, cv::Point(i,j));
-				}
+						 if ((boundry.width * boundry.height) < 100) continue;
+
+						 // boundry box expanding ...
+						 boundry.x -=boundry.width * BOUNDRY_EXPAND_SIZE;
+						 boundry.y -=boundry.height * BOUNDRY_EXPAND_SIZE;
+
+						 boundry.width += boundry.width*(2*BOUNDRY_EXPAND_SIZE);
+						 boundry.height += boundry.height*(2*BOUNDRY_EXPAND_SIZE);
+
+						 if (boundry.x <= 0)
+							 boundry.x =1;
+						 
+						 if (boundry.y <= 0)
+							 boundry.y =1;
+						 
+						 if ( (boundry.x + boundry.width) >= edgeMap1.cols )
+							 boundry.width = (edgeMap1.cols - boundry.x -1);
+
+						 if ( (boundry.y + boundry.height) >= edgeMap1.rows )
+							 boundry.height = (edgeMap1.rows - boundry.y -1);
+
+						 rgbRoi1 =rgbImage1(boundry),
+						 rgbRoi2 =rgbImage2(boundry);
+						 
+						 searchEdge(rgbRoi1, rgbRoi2, cv::Point(i,j));
+				} // end of if
 			}
 		}
 		
